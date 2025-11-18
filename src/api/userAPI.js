@@ -4,7 +4,7 @@
  * All user-related API requests
  */
 
-import { API_BASE_URL } from '../config/apiConfig';
+import { API_BASE_URL, authenticatedFetch, parseErrorResponse } from '../config/apiConfig';
 
 const BASE_URL = `${API_BASE_URL}/users`;
 
@@ -12,13 +12,14 @@ const BASE_URL = `${API_BASE_URL}/users`;
  * Register a new user
  * POST /api/users/register
  * @param {Object} userData - User registration data
- * @param {string} userData.firstName - User's first name
- * @param {string} userData.lastName - User's last name
- * @param {string} userData.email - User's email
- * @param {string} userData.telephone - User's telephone number
- * @param {string} userData.password - User's password
- * @param {string} userData.userRole - User's role (DEVELOPER or CLIENT)
- * @returns {Promise<Object>} Response with user data
+ * @param {string} userData.firstName - User's first name (max 127 chars)
+ * @param {string} userData.lastName - User's last name (max 127 chars)
+ * @param {string} userData.username - User's username (3-50 chars)
+ * @param {string} userData.email - User's email (valid email, max 255 chars)
+ * @param {string} userData.telephone - User's telephone number (optional, max 15 chars)
+ * @param {string} userData.password - User's password (min 8 chars)
+ * @param {string} userData.userRole - User's role (CLIENT, DEVELOPER, or ADMIN)
+ * @returns {Promise<Object>} Response with user data (201 CREATED)
  */
 export const registerUser = async (userData) => {
 	try {
@@ -30,22 +31,17 @@ export const registerUser = async (userData) => {
 			body: JSON.stringify(userData),
 		});
 
-		// Check if response has content
-		const contentType = response.headers.get("content-type");
-		let data = null;
-		
-		if (contentType && contentType.includes("application/json")) {
-			const text = await response.text();
-			if (text) {
-				data = JSON.parse(text);
-			}
-		}
-
 		if (!response.ok) {
-			throw new Error(data?.message || data?.error || `Registration failed with status ${response.status}`);
+			const error = await parseErrorResponse(response);
+			// Return error with validation details if present
+			throw {
+				status: response.status,
+				message: error.message || 'Registration failed',
+				validationErrors: error.validationErrors || null
+			};
 		}
 
-		return data || { success: true };
+		return await response.json();
 	} catch (error) {
 		console.error("Registration error:", error);
 		throw error;
@@ -58,7 +54,7 @@ export const registerUser = async (userData) => {
  * @param {Object} credentials - Login credentials
  * @param {string} credentials.email - User's email
  * @param {string} credentials.password - User's password
- * @returns {Promise<Object>} Response with user data and tokens (accessToken, refreshToken)
+ * @returns {Promise<Object>} Response with accessToken, refreshToken, user, tokenType (200 OK)
  */
 export const loginUser = async (credentials) => {
 	try {
@@ -70,22 +66,12 @@ export const loginUser = async (credentials) => {
 			body: JSON.stringify(credentials),
 		});
 
-		// Check if response has content
-		const contentType = response.headers.get("content-type");
-		let data = null;
-		
-		if (contentType && contentType.includes("application/json")) {
-			const text = await response.text();
-			if (text) {
-				data = JSON.parse(text);
-			}
-		}
-
 		if (!response.ok) {
-			throw new Error(data?.message || data?.error || `Login failed with status ${response.status}`);
+			const error = await parseErrorResponse(response);
+			throw new Error(error.message || 'Invalid email or password');
 		}
 
-		return data || { success: true };
+		return await response.json();
 	} catch (error) {
 		console.error("Login error:", error);
 		throw error;
@@ -124,22 +110,17 @@ export const refreshToken = async (refreshToken) => {
  * Get user by ID
  * GET /api/users/{id}
  * @param {number} userId - User ID
- * @param {string} token - JWT token for authentication
- * @returns {Promise<Object>} User data
+ * @returns {Promise<Object>} User data (200 OK)
  */
-export const getUserById = async (userId, token) => {
+export const getUserById = async (userId) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}`, {
 			method: "GET",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
-			throw new Error(error.message || "Failed to fetch user");
+			const error = await parseErrorResponse(response);
+			throw new Error(error.message || "User not found");
 		}
 
 		return await response.json();
@@ -153,22 +134,17 @@ export const getUserById = async (userId, token) => {
  * Get user by email
  * GET /api/users/email/{email}
  * @param {string} email - User's email
- * @param {string} token - JWT token for authentication
- * @returns {Promise<Object>} User data
+ * @returns {Promise<Object>} User data (200 OK)
  */
-export const getUserByEmail = async (email, token) => {
+export const getUserByEmail = async (email) => {
 	try {
-		const response = await fetch(`${BASE_URL}/email/${email}`, {
+		const response = await authenticatedFetch(`${BASE_URL}/email/${email}`, {
 			method: "GET",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
-			throw new Error(error.message || "Failed to fetch user");
+			const error = await parseErrorResponse(response);
+			throw new Error(error.message || "User not found");
 		}
 
 		return await response.json();
@@ -181,22 +157,17 @@ export const getUserByEmail = async (email, token) => {
 /**
  * Get users by role
  * GET /api/users/role/{role}
- * @param {string} role - User role (DEVELOPER or CLIENT)
- * @param {string} token - JWT token for authentication
- * @returns {Promise<Array>} List of users with specified role
+ * @param {string} role - User role (CLIENT, DEVELOPER, or ADMIN)
+ * @returns {Promise<Array>} List of users with specified role (200 OK)
  */
-export const getUsersByRole = async (role, token) => {
+export const getUsersByRole = async (role) => {
 	try {
-		const response = await fetch(`${BASE_URL}/role/${role}`, {
+		const response = await authenticatedFetch(`${BASE_URL}/role/${role}`, {
 			method: "GET",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to fetch users");
 		}
 
@@ -237,21 +208,16 @@ export const emailExists = async (email) => {
 /**
  * Get all users
  * GET /api/users
- * @param {string} token - JWT token for authentication
- * @returns {Promise<Array>} List of all users
+ * @returns {Promise<Array>} List of all users (200 OK)
  */
-export const getAllUsers = async (token) => {
+export const getAllUsers = async () => {
 	try {
-		const response = await fetch(`${BASE_URL}`, {
+		const response = await authenticatedFetch(`${BASE_URL}`, {
 			method: "GET",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to fetch users");
 		}
 
@@ -267,22 +233,22 @@ export const getAllUsers = async (token) => {
  * PUT /api/users/{id}
  * @param {number} userId - User ID
  * @param {Object} userData - Updated user data
- * @param {string} token - JWT token for authentication
- * @returns {Promise<Object>} Updated user data
+ * @param {string} userData.firstName - User's first name (max 127 chars)
+ * @param {string} userData.lastName - User's last name (max 127 chars)
+ * @param {string} userData.username - User's username (3-50 chars)
+ * @param {string} userData.email - User's email (valid email, max 255 chars)
+ * @param {string} userData.telephone - User's telephone (optional, max 15 chars)
+ * @returns {Promise<Object>} Updated user data (200 OK)
  */
-export const updateUser = async (userId, userData, token) => {
+export const updateUser = async (userId, userData) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}`, {
 			method: "PUT",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 			body: JSON.stringify(userData),
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to update user");
 		}
 
@@ -297,22 +263,17 @@ export const updateUser = async (userId, userData, token) => {
  * Update user status
  * PATCH /api/users/{id}/status
  * @param {number} userId - User ID
- * @param {string} status - User status (ACTIVE, INACTIVE, SUSPENDED, DELETED)
- * @param {string} token - JWT token for authentication
- * @returns {Promise<void>}
+ * @param {string} status - User status (ONLINE or OFFLINE)
+ * @returns {Promise<void>} (200 OK, no content)
  */
-export const updateUserStatus = async (userId, status, token) => {
+export const updateUserStatus = async (userId, status) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}/status?status=${status}`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}/status?status=${status}`, {
 			method: "PATCH",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to update user status");
 		}
 	} catch (error) {
@@ -325,21 +286,16 @@ export const updateUserStatus = async (userId, status, token) => {
  * Update user's last seen timestamp
  * PATCH /api/users/{id}/last-seen
  * @param {number} userId - User ID
- * @param {string} token - JWT token for authentication
- * @returns {Promise<void>}
+ * @returns {Promise<void>} (200 OK, no content)
  */
-export const updateLastSeen = async (userId, token) => {
+export const updateLastSeen = async (userId) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}/last-seen`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}/last-seen`, {
 			method: "PATCH",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to update last seen");
 		}
 	} catch (error) {
@@ -353,24 +309,20 @@ export const updateLastSeen = async (userId, token) => {
  * POST /api/users/{id}/change-password
  * @param {number} userId - User ID
  * @param {Object} passwordData - Password change data
- * @param {string} passwordData.oldPassword - Current password
+ * @param {string} passwordData.currentPassword - Current password
  * @param {string} passwordData.newPassword - New password
- * @param {string} token - JWT token for authentication
+ * @param {string} passwordData.confirmNewPassword - Confirm new password
  * @returns {Promise<void>}
  */
-export const changePassword = async (userId, passwordData, token) => {
+export const changePassword = async (userId, passwordData) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}/change-password`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}/change-password`, {
 			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 			body: JSON.stringify(passwordData),
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to change password");
 		}
 	} catch (error) {
@@ -383,21 +335,16 @@ export const changePassword = async (userId, passwordData, token) => {
  * Activate user account
  * PATCH /api/users/{id}/activate
  * @param {number} userId - User ID
- * @param {string} token - JWT token for authentication
- * @returns {Promise<void>}
+ * @returns {Promise<void>} (200 OK, no content)
  */
-export const activateUser = async (userId, token) => {
+export const activateUser = async (userId) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}/activate`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}/activate`, {
 			method: "PATCH",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to activate user");
 		}
 	} catch (error) {
@@ -410,21 +357,16 @@ export const activateUser = async (userId, token) => {
  * Deactivate user account
  * PATCH /api/users/{id}/deactivate
  * @param {number} userId - User ID
- * @param {string} token - JWT token for authentication
- * @returns {Promise<void>}
+ * @returns {Promise<void>} (200 OK, no content)
  */
-export const deactivateUser = async (userId, token) => {
+export const deactivateUser = async (userId) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}/deactivate`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}/deactivate`, {
 			method: "PATCH",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to deactivate user");
 		}
 	} catch (error) {
@@ -434,24 +376,19 @@ export const deactivateUser = async (userId, token) => {
 };
 
 /**
- * Delete user
+ * Delete user (soft delete)
  * DELETE /api/users/{id}
  * @param {number} userId - User ID
- * @param {string} token - JWT token for authentication
- * @returns {Promise<void>}
+ * @returns {Promise<void>} (204 NO CONTENT)
  */
-export const deleteUser = async (userId, token) => {
+export const deleteUser = async (userId) => {
 	try {
-		const response = await fetch(`${BASE_URL}/${userId}`, {
+		const response = await authenticatedFetch(`${BASE_URL}/${userId}`, {
 			method: "DELETE",
-			headers: {
-				"Content-Type": "application/json",
-				"Authorization": `Bearer ${token}`,
-			},
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
+			const error = await parseErrorResponse(response);
 			throw new Error(error.message || "Failed to delete user");
 		}
 	} catch (error) {

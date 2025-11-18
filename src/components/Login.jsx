@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/Authentication.css";
 import authIllustration from "../assets/authlogo.png";
-import { loginUser } from "../API/userAPI";
+import { loginUser } from "../api/userAPI";
 
 export default function LoginModal({
 	isOpen,
@@ -50,31 +50,34 @@ export default function LoginModal({
 			const result = await loginUser(credentials);
 			console.log("Login successful:", result);
 
-			// Store authentication data
+			// Clear any old token keys
+			localStorage.removeItem('devconnect_token');
+			localStorage.removeItem('devconnect_refresh_token');
+			localStorage.removeItem('devconnect_user');
+			localStorage.removeItem('auth_token');
+
+			// Store authentication data (matching documentation format)
 			if (result.accessToken) {
-				localStorage.setItem('devconnect_token', result.accessToken);
+				localStorage.setItem('accessToken', result.accessToken);
 			}
 			if (result.refreshToken) {
-				localStorage.setItem('devconnect_refresh_token', result.refreshToken);
+				localStorage.setItem('refreshToken', result.refreshToken);
 			}
 			if (result.user) {
-				localStorage.setItem('devconnect_user', JSON.stringify(result.user));
+				localStorage.setItem('user', JSON.stringify(result.user));
 			}
 
-			alert(`Welcome back, ${result.user?.firstName || 'User'}!`);
+			// Close modal first
 			onClose?.();
 
-			// Redirect based on user role
-			if (result.user?.userRole === 'DEVELOPER') {
-				navigate('/dashboard-developer');
-			} else if (result.user?.userRole === 'CLIENT') {
-				navigate('/dashboard-client');
-			} else {
-				navigate('/');
-			}
+			// Small delay to ensure modal closes before navigation
+			setTimeout(() => {
+				// Redirect to dashboard (App.jsx handles which dashboard to show based on role)
+				navigate('/dashboard');
+			}, 100);
 		} catch (error) {
 			console.error("Login error:", error);
-			const errorMessage = error.message || "Login failed. Please check your credentials.";
+			const errorMessage = error.message || "Invalid email or password";
 			alert(errorMessage);
 		} finally {
 			setIsLoading(false);

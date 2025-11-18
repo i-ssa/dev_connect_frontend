@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "../styles/Authentication.css";
 import authIllustration from "../assets/authlogo.png";
+import { requestResetCode, verifyResetCode, resetPassword } from "../api/passwordResetAPI";
 
 export default function ForgotPasswordModal({ isOpen, onClose, onSwitchToSignin }) {
 	const [step, setStep] = useState("email");
@@ -48,10 +49,13 @@ export default function ForgotPasswordModal({ isOpen, onClose, onSwitchToSignin 
 		}
 
 		try {
-			await new Promise((resolve) => setTimeout(resolve, 2000));
+			const message = await requestResetCode(formData.email);
+			console.log("Reset code requested:", message);
+			// Backend returns same message whether email exists or not (security)
 			setStep("code");
 		} catch (err) {
-			setError("Failed to send reset email. Please try again.");
+			console.error("Request reset code error:", err);
+			setError(err.message || "Failed to send reset email. Please try again.");
 		} finally {
 			setIsLoading(false);
 		}
@@ -69,10 +73,12 @@ export default function ForgotPasswordModal({ isOpen, onClose, onSwitchToSignin 
 		}
 
 		try {
-			await new Promise((resolve) => setTimeout(resolve, 1500));
+			const message = await verifyResetCode(formData.email, formData.resetCode);
+			console.log("Reset code verified:", message);
 			setStep("reset");
 		} catch (err) {
-			setError("Invalid or expired code. Please try again.");
+			console.error("Verify reset code error:", err);
+			setError(err.message || "Invalid or expired code. Please try again.");
 		} finally {
 			setIsLoading(false);
 		}
@@ -96,10 +102,16 @@ export default function ForgotPasswordModal({ isOpen, onClose, onSwitchToSignin 
 		}
 
 		try {
-			await new Promise((resolve) => setTimeout(resolve, 2000));
+			const message = await resetPassword(
+				formData.email, 
+				formData.newPassword, 
+				formData.confirmPassword
+			);
+			console.log("Password reset successful:", message);
 			setStep("success");
 		} catch (err) {
-			setError("Failed to reset password. Please try again.");
+			console.error("Reset password error:", err);
+			setError(err.message || "Failed to reset password. Please try again.");
 		} finally {
 			setIsLoading(false);
 		}
@@ -109,10 +121,12 @@ export default function ForgotPasswordModal({ isOpen, onClose, onSwitchToSignin 
 		setError("");
 		setIsLoading(true);
 		try {
-			await new Promise((resolve) => setTimeout(resolve, 1000));
+			const message = await requestResetCode(formData.email);
+			console.log("Reset code resent:", message);
 			alert("Reset code resent to your email!");
 		} catch (err) {
-			setError("Failed to resend code");
+			console.error("Resend reset code error:", err);
+			setError(err.message || "Failed to resend code");
 		} finally {
 			setIsLoading(false);
 		}
