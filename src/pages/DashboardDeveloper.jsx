@@ -1,7 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ProjectDetailsModal from '../components/ProjectDetailsModal';
 import '../styles/Dashboard.css';
+import ApiService from '../services/ApiService';
+import { mapBackendProjectToFrontend } from '../utils/projectMapper';
 
 const MoneyBarChart = ({ clientMoney, developerMoney }) => {
   const max = Math.max(clientMoney, developerMoney, 1);
@@ -38,84 +40,86 @@ const QuickAction = ({ label, icon }) => (
 );
 
 export default function DashboardDeveloper() {
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [myProjects, setMyProjects] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load current user from localStorage
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('devconnect_user') || '{}');
+    } catch {
+      return {};
+    }
+  })();
+
+  useEffect(() => {
+    // Fetch developer's assigned projects from backend
+    const loadMyProjects = async () => {
+      if (!currentUser?.id && !currentUser?.userId) {
+        setIsLoading(false);
+        return;
+      }
+
+      const devId = currentUser.id || currentUser.userId;
+      setIsLoading(true);
+      try {
+        const backendProjects = await ApiService.getProjectsByDeveloper(devId);
+        const mapped = (backendProjects || []).map(mapBackendProjectToFrontend);
+        setMyProjects(mapped);
+      } catch (e) {
+        console.error('Failed to load developer projects', e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadMyProjects();
+  }, [currentUser?.id, currentUser?.userId]);
+
   // Example stats
   const summary = [
     {
-      title: 'Agents Deployed',
-      value: 12,
-      icon: '🤖',
+      title: 'Active Projects',
+      value: myProjects.filter(p => p.status === 'in-progress').length,
+      icon: '🚀',
       color: '#e3f2fd',
-      note: '↑ 2 from last week',
+      note: 'In Progress',
     },
     {
-      title: 'Active Workflows',
-      value: 32,
-      icon: '⚙️',
-      color: '#e8f5e9',
-      note: '↑ 8% increase',
-    },
-    {
-      title: 'Pending Alerts',
-      value: 3,
-      icon: '🔔',
-      color: '#fff3e0',
-      note: '↓ 1 new alert',
-    },
-    {
-      title: 'Completed Tasks',
-      value: 67,
+      title: 'Completed Projects',
+      value: myProjects.filter(p => p.status === 'completed').length,
       icon: '✅',
+      color: '#e8f5e9',
+      note: 'All Time',
+    },
+    {
+      title: 'Total Projects',
+      value: myProjects.length,
+      icon: '📊',
+      color: '#fff3e0',
+      note: 'Overall',
+    },
+    {
+      title: 'Available Projects',
+      value: '?',
+      icon: '🔔',
       color: '#e1f5fe',
-      note: '↑ 10 today',
+      note: 'Check Marketplace',
     },
   ];
 
-  // Money stats for bar chart
+  // Money stats for bar chart (placeholder)
   const clientMoney = 15800;
   const developerMoney = 27879;
 
-  // Developer-focused quick actions
+  // Quick actions
   const actions = [
-    { label: 'Browse Projects', icon: '🔍' },
-    { label: 'Update Skills', icon: '⚡' },
-    { label: 'Time Tracker', icon: '⏱️' },
-    { label: 'Earnings Report', icon: '💸' },
+    { label: 'Browse Marketplace', icon: '🛒' },
+    { label: 'My Projects', icon: '📁' },
+    { label: 'Messages', icon: '💬' },
+    { label: 'Analytics', icon: '📈' },
   ];
-
-  // Projects done by developer (include ids and clientId to allow linking)
-  const projectsDone = [
-    {
-      id: 'p1',
-      name: 'Restaurant Website',
-      percent: 100,
-      clientId: 'c100',
-      client: 'John Client',
-      description: 'Full website for a local restaurant with menu and reservations.',
-      milestones: [
-        { id: 'm1', title: 'Design', status: 'Done' },
-        { id: 'm2', title: 'Dev', status: 'Done' },
-        { id: 'm3', title: 'Testing', status: 'Done' },
-      ],
-      status: 'Completed',
-    },
-    {
-      id: 'p2',
-      name: 'E-Commerce Platform',
-      percent: 85,
-      clientId: 'c101',
-      client: 'Acme Store',
-      description: 'Shopping platform with payments and admin panel.',
-      milestones: [
-        { id: 'm1', title: 'Scoping', status: 'Done' },
-        { id: 'm2', title: 'Implementation', status: 'In Progress' },
-      ],
-      status: 'In Progress',
-    },
-    { id: 'p3', name: 'Portfolio Site', percent: 60, clientId: 'c102', client: 'Sally Portfolio', description: 'Personal portfolio site.', milestones: [], status: 'In Progress' },
-    { id: 'p4', name: 'Booking App', percent: 95, clientId: 'c103', client: 'TravelCo', description: 'Booking web app for tours.', milestones: [], status: 'Almost Done' },
-  ];
-
-  const [selectedProject, setSelectedProject] = useState(null);
 
   return (
     <div className="dashboard-page redesigned">
@@ -154,19 +158,28 @@ export default function DashboardDeveloper() {
       </div>
 
       <div className="projects-section">
-        <div className="projects-title">Projects Done</div>
-        <div className="projects-list">
-          {projectsDone.map((proj) => (
-            <div key={proj.id} className="project-item project-link" onClick={() => setSelectedProject(proj)} role="button" tabIndex={0}>
-              <div className="project-name">{proj.name}</div>
-              <div className="project-owner">{proj.client}</div>
-              <div className="project-progress-bar">
-                <div className="project-progress" style={{ width: `${proj.percent}%` }} />
-                <span className="project-percent">{proj.percent}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className="projects-title">My Projects</div>
+        {isLoading ? (
+          <div>Loading your projects...</div>
+        ) : (
+          <div className="projects-list">
+            {myProjects.length === 0 && <div>No projects assigned yet. Check the Marketplace!</div>}
+            {myProjects.map((proj) => {
+              // Calculate a simple percentage based on status
+              const percent = proj.status === 'completed' ? 100 : proj.status === 'in-progress' ? 50 : 0;
+              return (
+                <div key={proj.id} className="project-item project-link" onClick={() => setSelectedProject(proj)} role="button" tabIndex={0}>
+                  <div className="project-name">{proj.title}</div>
+                  <div className="project-owner">Budget: {proj.budget}</div>
+                  <div className="project-progress-bar">
+                    <div className="project-progress" style={{ width: `${percent}%` }} />
+                    <span className="project-percent">{percent}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       {selectedProject && (
         <ProjectDetailsModal project={selectedProject} onClose={() => setSelectedProject(null)} />

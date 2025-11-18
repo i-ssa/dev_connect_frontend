@@ -19,10 +19,9 @@ const Footer = () => {
 
           <div className="footer-contact">
             <h3 className="contact-title">Contact us:</h3>
-            <p className="contact-item">Email: info@positivus.com</p>
-            <p className="contact-item">Phone: 555-567-8901</p>
-            <p className="contact-item">Address: 1234 Main St</p>
-            <p className="contact-item">Moonstone City, Stardust State 42345</p>
+            <p className="contact-item">Email: devconnect@support.com</p>
+            <p className="contact-item">Phone: +254715008671</p>
+            <p className="contact-item">Address: Nairobi CBD</p>
           </div>
         </div>
 
@@ -62,7 +61,7 @@ const Footer = () => {
 
       {/* Bottom Section */}
       <div className="footer-bottom">
-        <p className="copyright">© 2023 Positivus. All Rights Reserved.</p>
+        <p className="copyright">© 2025 DevConnect. All Rights Reserved.</p>
         <Link to="/privacy" className="privacy-link">Privacy Policy</Link>
       </div>
     </footer>

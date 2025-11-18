@@ -1,4 +1,4 @@
-﻿import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -13,28 +13,34 @@ import SignupModal from './components/Signup';
 import ForgotPasswordModal from './components/ForgotPassword';
 import ResetPasswordModal from './components/ResetPassword';
 import MyProjects from './pages/MyProjectClient';
+import MyProjectsDeveloper from './pages/MyProjectsDeveloper';
 import FindDevelopers from './pages/FindDevelopers';
 import RoleSelectionPage from './pages/RoleSelectionPage';
 import FindClients from './pages/FindClients';
 import DashboardClient from './pages/DashboardClient';
 import DashboardDeveloper from './pages/DashboardDeveloper';
+import Marketplace from './pages/Marketplace';
 import ProjectDetails from './pages/ProjectDetails';
-import WebSocketService from './services/WebSocketService';
+import WebSocketService from './services/WebSocketService'; 
 import './App.css';
 
 // Layout wrapper to conditionally show Navbar/Footer
 function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout, userRole }) {
   const location = useLocation();
-
+  
   // Only show navbar and footer on the home page
   const showNavAndFooter = location.pathname === '/';
 
   // Show global sidebar on dashboard-like routes
   const sidebarRoutes = new Set([
     '/dashboard',
+    '/dashboard-client',
+    '/dashboard-developer',
     '/profile',
     '/projects',
     '/myProjects',
+    '/myProjectsDeveloper',
+    '/marketplace',
     '/findDevelopers',
     '/findClients',
     '/messages',
@@ -49,8 +55,8 @@ function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout,
   return (
     <div className={appClassName}>
       {showNavAndFooter && (
-        <Navbar
-          onSigninClick={onSigninClick}
+        <Navbar 
+          onSigninClick={onSigninClick} 
           onSignupClick={onSignupClick}
           currentUser={currentUser}
           onLogout={onLogout}
@@ -65,18 +71,6 @@ function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout,
       {showNavAndFooter && <Footer />}
     </div>
   );
-}
-
-// Logout component that handles logout and redirects
-function LogoutHandler({ onLogout }) {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    onLogout();
-    navigate('/');
-  }, [onLogout, navigate]);
-
-  return null;
 }
 
 function App() {
@@ -130,12 +124,17 @@ function App() {
 
   // Function to handle logout
   const handleLogout = () => {
+    // Clear all authentication data
+    localStorage.removeItem('devconnect_user');
+    localStorage.removeItem('devconnect_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('devconnect_refresh_token');
+    
+    // Clear state
     setCurrentUser(null);
     setIsAuthenticated(false);
-    localStorage.removeItem('devconnect_user');
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    
+    // Disconnect WebSocket
     WebSocketService.disconnect();
   };
 
@@ -176,14 +175,14 @@ function App() {
     setActiveAuthModal('reset');
   };
 
-  const userRole = currentUser?.userRole || currentUser?.role || 'client';
+  const userRole = currentUser?.role || currentUser?.userRole?.toLowerCase() || 'client';
   const paymentElement = userRole === 'client' ? <ClientPayment /> : <DeveloperPayment />;
 
   return (
     <>
-      <Layout
-        onSigninClick={handleSigninClick}
-        onSignupClick={handleSignupClick}
+      <Layout 
+        onSigninClick={handleSigninClick} 
+        onSignupClick={handleSignupClick} 
         currentUser={currentUser}
         onLogout={handleLogout}
         userRole={userRole}
@@ -202,26 +201,28 @@ function App() {
           />
           <Route path="/role-selection" element={<RoleSelectionPage onRoleSelect={handleLogin} />} />
 
-          {/* Logout route */}
-          <Route path="/logout" element={<LogoutHandler onLogout={handleLogout} />} />
-
-          {/* Routes that render with the sidebar layout */}
+          {/* Dashboard Routes */}
           <Route 
-            path="/dashboard"
-            element={userRole === 'client' ? <DashboardClient /> : <DashboardDeveloper />}
+            path="/dashboard" 
+            element={userRole === 'client' ? <DashboardClient /> : <DashboardDeveloper />} 
           />
+          <Route path="/dashboard-client" element={<DashboardClient />} />
+          <Route path="/dashboard-developer" element={<DashboardDeveloper />} />
+          
           <Route path="/profile" element={<ProfilePage currentUser={currentUser} />} />
           <Route path="/projects" element={<MyProjects />} />
           <Route path="/myProjects" element={<MyProjects />} />
+          <Route path="/myProjectsDeveloper" element={<MyProjectsDeveloper />} />
           <Route path="/projects/:projectId" element={<ProjectDetails />} />
+          <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/findDevelopers" element={<FindDevelopers />} />
           <Route path="/findClients" element={<FindClients />} />
-
-          <Route
-            path="/messages"
-            element={<MessagingPage userRole={userRole} currentUser={currentUser} onSwitchUser={switchTestUser} />}
+          
+          <Route 
+            path="/messages" 
+            element={<MessagingPage userRole={userRole} currentUser={currentUser} onSwitchUser={switchTestUser} />} 
           />
-
+          
           <Route path="/client-payments" element={<ClientPayment />} />
           <Route path="/payments" element={paymentElement} />
           <Route path="/payment" element={paymentElement} />
@@ -263,4 +264,3 @@ function App() {
 }
 
 export default App;
-
