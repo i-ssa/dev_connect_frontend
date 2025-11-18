@@ -74,12 +74,12 @@ export default function DashboardDeveloper() {
   const clientMoney = 15800;
   const developerMoney = 27879;
 
-  // Only 4 important quick actions
+  // Developer-focused quick actions
   const actions = [
-    { label: 'New AI Agent', icon: '➕' },
-    { label: 'Integrations', icon: '🔗' },
-    { label: 'Task Automation', icon: '⏱️' },
-    { label: 'Analytics', icon: '�' },
+    { label: 'Browse Projects', icon: '🔍' },
+    { label: 'Update Skills', icon: '⚡' },
+    { label: 'Time Tracker', icon: '⏱️' },
+    { label: 'Earnings Report', icon: '💸' },
   ];
 
   // Projects done by developer (include ids and clientId to allow linking)

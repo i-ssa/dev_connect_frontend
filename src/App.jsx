@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+﻿import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -19,13 +19,13 @@ import FindClients from './pages/FindClients';
 import DashboardClient from './pages/DashboardClient';
 import DashboardDeveloper from './pages/DashboardDeveloper';
 import ProjectDetails from './pages/ProjectDetails';
-import WebSocketService from './services/WebSocketService'; 
+import WebSocketService from './services/WebSocketService';
 import './App.css';
 
 // Layout wrapper to conditionally show Navbar/Footer
 function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout, userRole }) {
   const location = useLocation();
-  
+
   // Only show navbar and footer on the home page
   const showNavAndFooter = location.pathname === '/';
 
@@ -49,8 +49,8 @@ function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout,
   return (
     <div className={appClassName}>
       {showNavAndFooter && (
-        <Navbar 
-          onSigninClick={onSigninClick} 
+        <Navbar
+          onSigninClick={onSigninClick}
           onSignupClick={onSignupClick}
           currentUser={currentUser}
           onLogout={onLogout}
@@ -65,6 +65,18 @@ function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout,
       {showNavAndFooter && <Footer />}
     </div>
   );
+}
+
+// Logout component that handles logout and redirects
+function LogoutHandler({ onLogout }) {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    onLogout();
+    navigate('/');
+  }, [onLogout, navigate]);
+
+  return null;
 }
 
 function App() {
@@ -121,6 +133,9 @@ function App() {
     setCurrentUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem('devconnect_user');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
     WebSocketService.disconnect();
   };
 
@@ -161,14 +176,14 @@ function App() {
     setActiveAuthModal('reset');
   };
 
-  const userRole = currentUser?.role || 'client';
+  const userRole = currentUser?.userRole || currentUser?.role || 'client';
   const paymentElement = userRole === 'client' ? <ClientPayment /> : <DeveloperPayment />;
 
   return (
     <>
-      <Layout 
-        onSigninClick={handleSigninClick} 
-        onSignupClick={handleSignupClick} 
+      <Layout
+        onSigninClick={handleSigninClick}
+        onSignupClick={handleSignupClick}
         currentUser={currentUser}
         onLogout={handleLogout}
         userRole={userRole}
@@ -187,10 +202,13 @@ function App() {
           />
           <Route path="/role-selection" element={<RoleSelectionPage onRoleSelect={handleLogin} />} />
 
+          {/* Logout route */}
+          <Route path="/logout" element={<LogoutHandler onLogout={handleLogout} />} />
+
           {/* Routes that render with the sidebar layout */}
           <Route 
-            path="/dashboard" 
-            element={userRole === 'client' ? <DashboardClient /> : <DashboardDeveloper />} 
+            path="/dashboard"
+            element={userRole === 'client' ? <DashboardClient /> : <DashboardDeveloper />}
           />
           <Route path="/profile" element={<ProfilePage currentUser={currentUser} />} />
           <Route path="/projects" element={<MyProjects />} />
@@ -198,12 +216,12 @@ function App() {
           <Route path="/projects/:projectId" element={<ProjectDetails />} />
           <Route path="/findDevelopers" element={<FindDevelopers />} />
           <Route path="/findClients" element={<FindClients />} />
-          
-          <Route 
-            path="/messages" 
-            element={<MessagingPage userRole={userRole} currentUser={currentUser} onSwitchUser={switchTestUser} />} 
+
+          <Route
+            path="/messages"
+            element={<MessagingPage userRole={userRole} currentUser={currentUser} onSwitchUser={switchTestUser} />}
           />
-          
+
           <Route path="/client-payments" element={<ClientPayment />} />
           <Route path="/payments" element={paymentElement} />
           <Route path="/payment" element={paymentElement} />
@@ -245,3 +263,4 @@ function App() {
 }
 
 export default App;
+

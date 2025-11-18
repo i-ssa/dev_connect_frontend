@@ -39,35 +39,35 @@ const QuickAction = ({ label, icon }) => (
 );
 
 export default function DashboardClient() {
-  // Example stats
+  // Client-focused stats
   const summary = [
     {
-      title: 'Agents Deployed',
-      value: 24,
-      icon: '🤖',
-      color: '#e3f2fd',
-      note: '↑ 4 from last week',
-    },
-    {
-      title: 'Active Workflows',
-      value: 45,
-      icon: '⚙️',
-      color: '#e8f5e9',
-      note: '↑ 12% increase',
-    },
-    {
-      title: 'Pending Alerts',
-      value: 8,
-      icon: '🔔',
+      title: 'Active Projects',
+      value: 4,
+      icon: '📂',
       color: '#fff3e0',
-      note: '↓ 3 new alerts',
+      note: '↑ 1 new this week',
     },
     {
-      title: 'Completed Tasks',
-      value: 128,
+      title: 'Developers Hired',
+      value: 8,
+      icon: '👥',
+      color: '#e8f5e9',
+      note: '↑ 2 this month',
+    },
+    {
+      title: 'Total Spent',
+      value: 'KSH 27,879',
+      icon: '💰',
+      color: '#fce4ec',
+      note: '↑ 12% from last month',
+    },
+    {
+      title: 'Completed Projects',
+      value: 12,
       icon: '✅',
-      color: '#e1f5fe',
-      note: '↑ 23 today',
+      color: '#e3f2fd',
+      note: '↑ 3 delivered',
     },
   ];
 
@@ -75,12 +75,12 @@ export default function DashboardClient() {
   const clientMoney = 27879;
   const developerMoney = 15800;
 
-  // Only 4 important quick actions
+  // Client-focused quick actions
   const actions = [
-    { label: 'New AI Agent', icon: '➕' },
-    { label: 'Integrations', icon: '🔗' },
-    { label: 'Task Automation', icon: '⏱️' },
-    { label: 'Analytics', icon: '�' },
+    { label: 'Post New Project', icon: '➕' },
+    { label: 'Find Developers', icon: '🔍' },
+    { label: 'Manage Budget', icon: '💵' },
+    { label: 'View Reports', icon: '📊' },
   ];
 
   // Projects offered by client (include ids)

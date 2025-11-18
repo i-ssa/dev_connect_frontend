@@ -1,35 +1,119 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import '../styles/ProfilePage.css';
 
 const ProfilePage = ({ currentUser }) => {
-  // Fallback user data if not provided
-  const defaultUser = {
-    id: 1,
-    username: 'john_doe',
-    email: 'john@example.com',
-    role: 'client',
-    firstName: 'John',
-    lastName: 'Doe',
-    avatar: null,
-    bio: 'Passionate about building innovative solutions and connecting with talented developers.',
-    location: 'San Francisco, CA',
-    website: 'https://johndoe.com',
-    github: 'johndoe',
-    linkedin: 'johndoe',
-    skills: ['JavaScript', 'React', 'Node.js', 'Python'],
-    experience: '5 years',
-    hourlyRate: 75,
-    availability: 'Available',
-    joinedDate: '2024-01-15'
-  };
-
-  const user = currentUser || defaultUser;
+  const [user, setUser] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState(user);
+  const [formData, setFormData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  console.log('ProfilePage rendering with user:', user);
+  // Load user from localStorage or props on mount
+  useEffect(() => {
+    const loadUser = () => {
+      try {
+        console.log('[ProfilePage] Loading user...', { currentUser });
+        
+        // Fallback user data
+        const defaultUser = {
+          id: 1,
+          username: 'john_doe',
+          email: 'john@example.com',
+          role: 'client',
+          firstName: 'John',
+          lastName: 'Doe',
+          avatar: null,
+          bio: 'Passionate about building innovative solutions and connecting with talented developers.',
+          location: 'San Francisco, CA',
+          website: 'https://johndoe.com',
+          github: 'johndoe',
+          linkedin: 'johndoe',
+          skills: ['JavaScript', 'React', 'Node.js', 'Python'],
+          experience: '5 years',
+          hourlyRate: 75,
+          availability: 'Available',
+          joinedDate: '2024-01-15'
+        };
 
-  console.log('ProfilePage rendering with user:', user);
+        let userData = currentUser;
+        
+        if (!userData) {
+          const savedUser = localStorage.getItem('devconnect_user');
+          console.log('[ProfilePage] Saved user from localStorage:', savedUser);
+          if (savedUser) {
+            userData = JSON.parse(savedUser);
+            // Ensure skills array exists
+            if (!userData.skills) userData.skills = [];
+            if (!userData.bio) userData.bio = '';
+            if (!userData.location) userData.location = '';
+            if (!userData.website) userData.website = '';
+            if (!userData.github) userData.github = '';
+            if (!userData.linkedin) userData.linkedin = '';
+            if (!userData.experience) userData.experience = '';
+            if (!userData.hourlyRate) userData.hourlyRate = 0;
+            if (!userData.availability) userData.availability = 'Available';
+            if (!userData.joinedDate) userData.joinedDate = new Date().toISOString();
+          } else {
+            userData = defaultUser;
+          }
+        }
+        
+        console.log('[ProfilePage] Final userData:', userData);
+        setUser(userData);
+        setFormData(userData);
+      } catch (error) {
+        console.error('[ProfilePage] Error loading user:', error);
+        // Fallback to basic user
+        const fallback = {
+          id: 1,
+          username: 'user',
+          email: 'user@example.com',
+          role: 'client',
+          firstName: 'User',
+          lastName: 'Name',
+          avatar: null,
+          bio: '',
+          location: '',
+          website: '',
+          github: '',
+          linkedin: '',
+          skills: [],
+          experience: '',
+          hourlyRate: 0,
+          availability: 'Available',
+          joinedDate: new Date().toISOString()
+        };
+        setUser(fallback);
+        setFormData(fallback);
+      } finally {
+        console.log('[ProfilePage] Setting loading to false');
+        setLoading(false);
+      }
+    };
+    
+    loadUser();
+  }, [currentUser]);
+
+  if (loading) {
+    return (
+      <div className="profile-page">
+        <div className="profile-container">
+          <div style={{ padding: '40px', textAlign: 'center' }}>Loading profile...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !formData) {
+    return (
+      <div className="profile-page">
+        <div className="profile-container">
+          <div style={{ padding: '40px', textAlign: 'center', color: 'red' }}>
+            Error loading profile. Please try refreshing the page.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -47,10 +131,35 @@ const ProfilePage = ({ currentUser }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Call API to update user profile
-    console.log('Updating profile:', formData);
+    
+    try {
+      // Update local state
+      setUser(formData);
+      
+      // Save to localStorage
+      localStorage.setItem('devconnect_user', JSON.stringify(formData));
+      
+      // TODO: Call API to update user profile on backend
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081';
+      const response = await fetch(`${API_BASE_URL}/api/users/${formData.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      
+      if (response.ok) {
+        console.log('Profile updated successfully');
+      } else {
+        console.error('Failed to update profile on backend');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+    }
+    
     setIsEditing(false);
   };
 
@@ -303,14 +412,14 @@ const ProfilePage = ({ currentUser }) => {
               {isEditing ? (
                 <input
                   type="text"
-                  value={formData.skills.join(', ')}
+                  value={(formData.skills || []).join(', ')}
                   onChange={handleSkillsChange}
                   placeholder="JavaScript, React, Node.js, Python..."
                   className="edit-input"
                 />
               ) : (
                 <div className="skills-list">
-                  {formData.skills.map((skill, index) => (
+                  {(formData.skills || []).map((skill, index) => (
                     <span key={index} className="skill-tag">{skill}</span>
                   ))}
                 </div>
@@ -372,8 +481,8 @@ const ProfilePage = ({ currentUser }) => {
                     <option value="Not Available">Not Available</option>
                   </select>
                 ) : (
-                  <span className={`availability-badge ${formData.availability.toLowerCase().replace(' ', '-')}`}>
-                    {formData.availability}
+                  <span className={`availability-badge ${(formData.availability || 'available').toLowerCase().replace(' ', '-')}`}>
+                    {formData.availability || 'Available'}
                   </span>
                 )}
               </div>
