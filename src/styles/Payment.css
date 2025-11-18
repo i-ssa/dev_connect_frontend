@@ -1,3 +1,27 @@
+.mpesa-payment {
+  border: 1px solid #e6e6e6;
+  padding: 12px;
+  border-radius: 6px;
+  max-width: 420px;
+}
+.mpesa-payment h4 {
+  margin: 0 0 8px 0;
+}
+.mpesa-form label {
+  display: block;
+  margin-bottom: 8px;
+}
+.mpesa-form input[type="tel"],
+.mpesa-form input[type="number"] {
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+.mpesa-actions { margin-top: 10px; }
+.mpesa-message { margin-top: 8px; padding: 8px; border-radius: 4px; }
+.mpesa-message.success { background: #e6ffed; color: #0b7a3a; }
+.mpesa-message.error { background: #ffe6e6; color: #a10000; }
 /* Payment Dashboard - Figma Design Match */
 * {
   margin: 0;

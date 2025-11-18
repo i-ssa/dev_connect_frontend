@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ApiService from "../services/ApiService";
+import { mapFrontendProjectToBackend } from "../utils/projectMapper";
 import "../styles/CreateProjectModal.css";
 
 export default function CreateProjectModal({ isOpen, onClose, onCreateProject }) {
@@ -9,6 +11,8 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 		description: "",
 		files: [],
 	});
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState(null);
 
 	if (!isOpen) {
 		return null;
@@ -22,30 +26,68 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 		setFormData({ ...formData, files: Array.from(e.target.files) });
 	};
 
-	const handleSubmit = (e) => {
+	const handleSubmit = async (e) => {
 		e.preventDefault();
 		
-		// Create project object with additional metadata
-		const newProject = {
-			id: Date.now(),
-			...formData,
-			status: "available", // available, in-progress, completed
-			createdAt: new Date().toISOString(),
-			assignedDeveloper: null,
-		};
+		try {
+			setLoading(true);
+			setError(null);
 
-		onCreateProject?.(newProject);
-		
-		// Reset form
-		setFormData({
-			title: "",
-			budget: "",
-			timeline: "",
-			description: "",
-			files: [],
-		});
-		
-		onClose();
+			// Get user info
+			const userStr = localStorage.getItem('devconnect_user');
+			if (!userStr) {
+				throw new Error('No user logged in. Please login first.');
+			}
+
+			const user = JSON.parse(userStr);
+			const clientId = user.id || user.userId;
+
+			if (!clientId) {
+				throw new Error('User ID not found. Cannot create project.');
+			}
+
+			// Map frontend form data to backend DTO
+			const projectRequest = mapFrontendProjectToBackend(formData, clientId, null);
+			
+			console.log('Creating project with data:', projectRequest);
+			console.log('User:', user);
+			console.log('Token:', localStorage.getItem('token') || localStorage.getItem('devconnect_token'));
+
+			// Create project via API
+			const createdProject = await ApiService.createProject(projectRequest);
+			console.log('Project created successfully:', createdProject);
+
+			// Upload files if present and backend supports it
+			if (formData.files.length > 0) {
+				try {
+					await ApiService.uploadProjectFiles(createdProject.projectId, formData.files);
+				} catch (uploadError) {
+					console.warn('File upload failed (endpoint may not exist):', uploadError);
+					// Continue even if file upload fails
+				}
+			}
+
+			// Notify parent with the created project
+			if (onCreateProject) {
+				onCreateProject(createdProject);
+			}
+
+			// Reset form
+			setFormData({
+				title: "",
+				budget: "",
+				timeline: "",
+				description: "",
+				files: [],
+			});
+
+			setLoading(false);
+			onClose();
+		} catch (err) {
+			console.error('Failed to create project:', err);
+			setError(err.message || 'Failed to create project. Please try again.');
+			setLoading(false);
+		}
 	};
 
 	const handleCancel = () => {
@@ -68,6 +110,19 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 					<p className="modal-subtitle">Fill in the details for your new project</p>
 				</div>
 
+				{error && (
+					<div className="error-message" style={{
+						padding: '10px',
+						marginBottom: '15px',
+						backgroundColor: '#fee',
+						border: '1px solid #fcc',
+						borderRadius: '4px',
+						color: '#c33'
+					}}>
+						{error}
+					</div>
+				)}
+
 				<form onSubmit={handleSubmit} className="project-form">
 					<div className="form-group">
 						<label htmlFor="title">Project Title *</label>
@@ -79,32 +134,36 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 							onChange={handleChange}
 							placeholder="Enter project name"
 							required
+							disabled={loading}
 						/>
 					</div>
 
 					<div className="form-row">
 						<div className="form-group">
-							<label htmlFor="budget">Budget Range *</label>
+							<label htmlFor="budget">Budget (USD) *</label>
 							<input
-								type="text"
+								type="number"
 								id="budget"
 								name="budget"
 								value={formData.budget}
 								onChange={handleChange}
-								placeholder="e.g., $500 - $2000"
+								placeholder="e.g., 2000"
 								required
+								disabled={loading}
+								min="0"
+								step="0.01"
 							/>
 						</div>
 						<div className="form-group">
-							<label htmlFor="timeline">Timeline *</label>
+							<label htmlFor="timeline">Timeline (Date) *</label>
 							<input
-								type="text"
+								type="date"
 								id="timeline"
 								name="timeline"
 								value={formData.timeline}
 								onChange={handleChange}
-								placeholder="e.g., 2-4 weeks"
 								required
+								disabled={loading}
 							/>
 						</div>
 					</div>
@@ -119,6 +178,7 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 							onChange={handleChange}
 							placeholder="Describe your project in detail"
 							required
+							disabled={loading}
 						/>
 					</div>
 
@@ -130,6 +190,7 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 							multiple
 							onChange={handleFileChange}
 							className="file-input"
+							disabled={loading}
 						/>
 						{formData.files.length > 0 && (
 							<ul className="file-list">
@@ -141,11 +202,11 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 					</div>
 
 					<div className="modal-actions">
-						<button type="button" onClick={handleCancel} className="cancel-btn">
+						<button type="button" onClick={handleCancel} className="cancel-btn" disabled={loading}>
 							Cancel
 						</button>
-						<button type="submit" className="create-btn">
-							Create Project
+						<button type="submit" className="create-btn" disabled={loading}>
+							{loading ? 'Creating...' : 'Create Project'}
 						</button>
 					</div>
 				</form>

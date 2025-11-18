@@ -50,12 +50,6 @@ export default function LoginModal({
 			const result = await loginUser(credentials);
 			console.log("Login successful:", result);
 
-			// Clear any old token keys
-			localStorage.removeItem('devconnect_token');
-			localStorage.removeItem('devconnect_refresh_token');
-			localStorage.removeItem('devconnect_user');
-			localStorage.removeItem('auth_token');
-
 			// Store authentication data (matching documentation format)
 			if (result.accessToken) {
 				localStorage.setItem('accessToken', result.accessToken);

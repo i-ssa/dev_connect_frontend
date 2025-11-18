@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "../styles/Authentication.css";
 import authIllustration from "../assets/authlogo.png";
 import { registerUser } from "../api/userAPI";

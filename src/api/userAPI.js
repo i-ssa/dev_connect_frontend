@@ -58,11 +58,13 @@ export const registerUser = async (userData) => {
  */
 export const loginUser = async (credentials) => {
 	try {
+		try {
 		const response = await fetch(`${BASE_URL}/login`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
+			credentials: 'include', // Include cookies for CSRF token
 			body: JSON.stringify(credentials),
 		});
 
@@ -72,6 +74,10 @@ export const loginUser = async (credentials) => {
 		}
 
 		return await response.json();
+	} catch (error) {
+		console.error("Login error:", error);
+		throw error;
+	}
 	} catch (error) {
 		console.error("Login error:", error);
 		throw error;
