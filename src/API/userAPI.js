@@ -22,12 +22,26 @@ const BASE_URL = `${API_BASE_URL}/users`;
  */
 export const registerUser = async (userData) => {
 	try {
-		const response = await fetch(`${BASE_URL}/register`, {
+		const url = `${BASE_URL}/register`;
+		console.log("🚀 Making registration request:", {
+			url,
+			method: "POST",
+			userData
+		});
+		
+		const response = await fetch('http://localhost:8081/api/users/register', {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(userData),
+		});
+
+		console.log("📥 Registration response received:", {
+			status: response.status,
+			statusText: response.statusText,
+			url: response.url,
+			headers: Object.fromEntries(response.headers.entries())
 		});
 
 		// Check if response has content
@@ -42,12 +56,48 @@ export const registerUser = async (userData) => {
 		}
 
 		if (!response.ok) {
+			console.error("❌ Registration failed:", {
+				status: response.status,
+				statusText: response.statusText,
+				data,
+				url
+			});
 			throw new Error(data?.message || data?.error || `Registration failed with status ${response.status}`);
 		}
 
+		console.log("✅ Registration successful:", data);
 		return data || { success: true };
 	} catch (error) {
-		console.error("Registration error:", error);
+		console.error("💥 Registration error:", error);
+		throw error;
+	}
+};
+
+/**
+ * Get developer ID by user ID
+ * GET /api/developers/user/{userId}
+ * @param {number} userId - User ID
+ * @returns {Promise<Object>} Developer object with developerId
+ */
+export const getDeveloperByUserId = async (userId) => {
+	try {
+		const token = localStorage.getItem('devconnect_token');
+		const response = await fetch(`${API_BASE_URL}/developers/user/${userId}`, {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				...(token ? { 'Authorization': `Bearer ${token}` } : {})
+			}
+		});
+
+		if (!response.ok) {
+			throw new Error(`Failed to fetch developer: ${response.status}`);
+		}
+
+		const text = await response.text();
+		return text ? JSON.parse(text) : null;
+	} catch (error) {
+		console.error('Error fetching developer:', error);
 		throw error;
 	}
 };
@@ -214,11 +264,13 @@ export const getUsersByRole = async (role, token) => {
 		});
 
 		if (!response.ok) {
-			const error = await response.json();
-			throw new Error(error.message || "Failed to fetch users");
+			const text = await response.text();
+			const error = text ? JSON.parse(text) : {};
+			throw new Error(error.message || `Failed to fetch users (${response.status})`);
 		}
 
-		return await response.json();
+		const text = await response.text();
+		return text ? JSON.parse(text) : [];
 	} catch (error) {
 		console.error("Get users by role error:", error);
 		throw error;

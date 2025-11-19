@@ -29,8 +29,14 @@ class WebSocketService {
 
     this.currentUserId = userId;
     
+    // Get token from localStorage for authentication
+    const token = localStorage.getItem('token');
+    
     this.client = new Client({
       webSocketFactory: () => new SockJS('http://localhost:8081/ws'),
+      connectHeaders: token ? {
+        Authorization: `Bearer ${token}`
+      } : {},
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
@@ -40,19 +46,19 @@ class WebSocketService {
         this.isConnected = true;
         
         // Subscribe to private message queue
-        this.client.subscribe(`/user/queue/messages`, (message) => {
+        this.client.subscribe(`/user/${userId}/queue/messages`, (message) => {
           const messageData = JSON.parse(message.body);
           this._notifySubscribers('onMessage', messageData);
         });
         
         // Subscribe to typing indicators
-        this.client.subscribe(`/user/queue/typing`, (message) => {
+        this.client.subscribe(`/user/${userId}/queue/typing`, (message) => {
           const typingData = JSON.parse(message.body);
           this._notifySubscribers('onTyping', typingData);
         });
         
         // Subscribe to read receipts
-        this.client.subscribe(`/user/queue/read-receipts`, (message) => {
+        this.client.subscribe(`/user/${userId}/queue/read-receipts`, (message) => {
           const receiptData = JSON.parse(message.body);
           this._notifySubscribers('onReadReceipt', receiptData);
         });

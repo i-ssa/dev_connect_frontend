@@ -21,6 +21,8 @@ import DashboardClient from './pages/DashboardClient';
 import DashboardDeveloper from './pages/DashboardDeveloper';
 import Marketplace from './pages/Marketplace';
 import ProjectDetails from './pages/ProjectDetails';
+import Analytics from './pages/Analytics';
+import ClientReports from './pages/ClientReports';
 import WebSocketService from './services/WebSocketService'; 
 import './App.css';
 
@@ -48,6 +50,8 @@ function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout,
     '/payments',
     '/payment',
     '/client-payments',
+    '/analytics',
+    '/client-reports',
   ]);
   const showSidebar = sidebarRoutes.has(location.pathname);
   const appClassName = showNavAndFooter ? 'app with-navbar' : 'app no-navbar';
@@ -176,6 +180,10 @@ function App() {
   };
 
   const userRole = currentUser?.role || currentUser?.userRole?.toLowerCase() || 'client';
+  
+  console.log('App.jsx - Current User:', currentUser);
+  console.log('App.jsx - User Role:', userRole);
+  
   const paymentElement = userRole === 'client' ? <ClientPayment /> : <DeveloperPayment />;
 
   return (
@@ -220,7 +228,7 @@ function App() {
           
           <Route 
             path="/messages" 
-            element={<MessagingPage userRole={userRole} currentUser={currentUser} onSwitchUser={switchTestUser} />} 
+            element={<MessagingPage />} 
           />
           
           <Route path="/client-payments" element={<ClientPayment />} />
@@ -228,6 +236,8 @@ function App() {
           <Route path="/payment" element={paymentElement} />
           <Route path="/payments/client" element={<ClientPayment />} />
           <Route path="/payments/developer" element={<DeveloperPayment />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/client-reports" element={<ClientReports />} />
           <Route path="/settings" element={<div className="placeholder">Settings Page</div>} />
           <Route
             path="*"

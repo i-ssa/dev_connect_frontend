@@ -1,6 +1,6 @@
 // Updated ChatList component with backend integration
 import { useState, useEffect } from 'react';
-import ApiService from '../../services/ApiService';
+import api from '../../utils/api';
 import '../../styles/ChatList.css';
 
 const ChatList = ({ onSelectChat, activeChat, currentUserId, userRole = 'client' }) => {
@@ -16,6 +16,7 @@ const ChatList = ({ onSelectChat, activeChat, currentUserId, userRole = 'client'
       userAvatar: null,
       userRole: 'developer',
       lastMessage: 'Sounds good! I can start working on it tomorrow.',
+      lastMessageTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       unreadCount: 2,
       userStatus: 'online',
@@ -27,6 +28,7 @@ const ChatList = ({ onSelectChat, activeChat, currentUserId, userRole = 'client'
       userAvatar: null,
       userRole: 'developer',
       lastMessage: 'I have some design mockups ready for review',
+      lastMessageTime: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       unreadCount: 0,
       userStatus: 'offline',
@@ -38,6 +40,7 @@ const ChatList = ({ onSelectChat, activeChat, currentUserId, userRole = 'client'
       userAvatar: null,
       userRole: 'developer',
       lastMessage: 'The responsive design is complete',
+      lastMessageTime: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
       timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
       unreadCount: 1,
       userStatus: 'away',
@@ -56,7 +59,7 @@ const ChatList = ({ onSelectChat, activeChat, currentUserId, userRole = 'client'
 
   const loadChats = async () => {
     try {
-      const userChats = await ApiService.getUserChats(currentUserId);
+      const userChats = await api.getUserChats(currentUserId);
       setChats(userChats);
       setLoading(false);
     } catch (error) {

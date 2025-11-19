@@ -1,6 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ProjectDetailsModal from '../components/ProjectDetailsModal';
+import ApiService from '../services/ApiService';
+import { mapBackendProjectToFrontend } from '../utils/projectMapper';
 import '../styles/Dashboard.css';
 
 // Simple bar chart for money stats
@@ -31,67 +34,165 @@ const SummaryCard = ({ title, value, icon, color, note }) => (
   </div>
 );
 
-const QuickAction = ({ label, icon }) => (
-  <div className="quick-action">
+const QuickAction = ({ label, icon, onClick }) => (
+  <div className="quick-action" onClick={onClick} style={{ cursor: 'pointer' }}>
     <div className="quick-action-icon">{icon}</div>
     <div className="quick-action-label">{label}</div>
   </div>
 );
 
 export default function DashboardClient() {
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const navigate = useNavigate();
+
+  // Get current user from localStorage
+  const currentUser = JSON.parse(localStorage.getItem('devconnect_user') || '{}');
+  const userId = currentUser.id || currentUser.userId;
+
+  console.log('DashboardClient - Current User:', currentUser);
+  console.log('DashboardClient - User ID:', userId);
+
+  useEffect(() => {
+    const fetchClientData = async () => {
+      console.log('Fetching client data for userId:', userId);
+      
+      if (!userId) {
+        console.warn('No userId found, skipping fetch');
+        setError('User not logged in');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        console.log('Calling ApiService.getProjectsByClient...');
+        // Fetch client's projects from API
+        const clientProjects = await ApiService.getProjectsByClient(userId);
+        console.log('Fetched projects (raw from backend):', clientProjects);
+        
+        // Map backend DTOs to frontend shape
+        const mappedProjects = (clientProjects || []).map(mapBackendProjectToFrontend);
+        console.log('Mapped projects:', mappedProjects);
+        
+        setProjects(mappedProjects);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching client data:', err);
+        if (err.message?.includes('403') || err.message?.includes('Forbidden')) {
+          setError('Authentication required. Please log in again.');
+        } else if (err.message?.includes('Failed to fetch')) {
+          setError('Unable to connect to server. Please check your internet connection.');
+        } else {
+          setError('Failed to load projects. Please try again later.');
+        }
+        setProjects([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClientData();
+  }, [userId]);
+
+  // Calculate real stats from fetched projects
+  console.log('DashboardClient - Projects for stats:', projects);
+  console.log('DashboardClient - Projects count:', projects.length);
+  
+  const activeProjects = projects.filter(p => 
+    p.status?.toUpperCase() === 'IN_PROGRESS' || 
+    p.status?.toUpperCase() === 'ACTIVE' ||
+    p.status?.toUpperCase() === 'PLANNING' ||
+    p.status === 'in-progress' || 
+    p.status === 'active'
+  ).length;
+
+  const completedProjects = projects.filter(p => 
+    p.status?.toUpperCase() === 'COMPLETED' ||
+    p.status?.toUpperCase() === 'DONE' ||
+    p.status === 'completed'
+  ).length;
+
+  const totalSpent = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
+
+  // Count unique developers across all projects (using devId from mapper)
+  const developersHired = new Set(
+    projects
+      .filter(p => p.devId || p.developerId)
+      .map(p => p.devId || p.developerId)
+  ).size;
+
+  console.log('DashboardClient - Stats:', {
+    activeProjects,
+    completedProjects,
+    totalSpent,
+    developersHired,
+    projects: projects.map(p => ({ 
+      id: p.id, 
+      title: p.title, 
+      status: p.status, 
+      budget: p.budget, 
+      devId: p.devId,
+      developerId: p.developerId 
+    }))
+  });
+
   // Client-focused stats
   const summary = [
     {
       title: 'Active Projects',
-      value: 4,
+      value: activeProjects,
       icon: '📂',
       color: '#fff3e0',
-      note: '↑ 1 new this week',
+      note: loading ? 'Loading...' : `${activeProjects} in progress`,
     },
     {
       title: 'Developers Hired',
-      value: 8,
+      value: developersHired,
       icon: '👥',
       color: '#e8f5e9',
-      note: '↑ 2 this month',
+      note: loading ? 'Loading...' : `${developersHired} developers`,
     },
     {
       title: 'Total Spent',
-      value: 'KSH 27,879',
+      value: `KSH ${totalSpent.toLocaleString()}`,
       icon: '💰',
       color: '#fce4ec',
-      note: '↑ 12% from last month',
+      note: loading ? 'Loading...' : `Across ${projects.length} projects`,
     },
     {
       title: 'Completed Projects',
-      value: 12,
+      value: completedProjects,
       icon: '✅',
       color: '#e3f2fd',
-      note: '↑ 3 delivered',
+      note: loading ? 'Loading...' : `${completedProjects} delivered`,
     },
   ];
 
-  // Money stats for bar chart
-  const clientMoney = 27879;
-  const developerMoney = 15800;
+  // Money stats for bar chart (could be enhanced with actual payment data)
+  const clientMoney = totalSpent;
+  const developerMoney = projects.reduce((sum, p) => 
+    (p.status?.toUpperCase() === 'COMPLETED' ? (p.budget || 0) : 0) + sum, 0
+  );
 
   // Client-focused quick actions
   const actions = [
-    { label: 'Post New Project', icon: '➕' },
-    { label: 'Find Developers', icon: '🔍' },
-    { label: 'Manage Budget', icon: '💵' },
-    { label: 'View Reports', icon: '📊' },
+    { label: 'Post New Project', icon: '➕', path: '/myProjects' },
+    { label: 'Find Developers', icon: '🔍', path: '/findDevelopers' },
+    { label: 'Manage Budget', icon: '💵', path: '/client-payments' },
+    { label: 'View Reports', icon: '📊', path: '/client-reports' },
   ];
 
-  // Projects offered by client (include ids)
-  const projectsOffered = [
-    { id: 'p1', name: 'Restaurant Website', percent: 80, clientId: 'c100', description: 'Local restaurant site', milestones: [], status: 'In Progress' },
-    { id: 'p2', name: 'E-Commerce Platform', percent: 55, clientId: 'c100', description: 'Online store', milestones: [], status: 'In Progress' },
-    { id: 'p3', name: 'Portfolio Site', percent: 30, clientId: 'c100', description: 'Personal portfolio', milestones: [], status: 'Planning' },
-    { id: 'p4', name: 'Booking App', percent: 90, clientId: 'c100', description: 'Tour booking app', milestones: [], status: 'In Review' },
-  ];
-
-  const [selectedProject, setSelectedProject] = useState(null);
+  // Calculate progress percentage for each project based on milestones
+  const calculateProgress = (project) => {
+    if (!project.milestones || project.milestones.length === 0) return 0;
+    const completedMilestones = project.milestones.filter(m => 
+      m.status?.toUpperCase() === 'COMPLETED' || m.completed
+    ).length;
+    return Math.round((completedMilestones / project.milestones.length) * 100);
+  };
 
   return (
     <div className="dashboard-page redesigned">
@@ -124,24 +225,36 @@ export default function DashboardClient() {
         <div className="quick-actions-title">Quick Actions</div>
         <div className="quick-actions-grid">
           {actions.map((action, i) => (
-            <QuickAction key={i} {...action} />
+            <QuickAction key={i} {...action} onClick={() => navigate(action.path)} />
           ))}
         </div>
       </div>
 
       <div className="projects-section">
-        <div className="projects-title">Projects Offered</div>
-        <div className="projects-list">
-          {projectsOffered.map((proj) => (
-            <div key={proj.id} className="project-item project-link" onClick={() => setSelectedProject(proj)} role="button" tabIndex={0}>
-              <div className="project-name">{proj.name}</div>
-              <div className="project-progress-bar">
-                <div className="project-progress" style={{ width: `${proj.percent}%` }} />
-                <span className="project-percent">{proj.percent}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className="projects-title">My Projects</div>
+        {loading ? (
+          <div className="loading-message">Loading projects...</div>
+        ) : error ? (
+          <div className="error-message">Error: {error}</div>
+        ) : projects.length === 0 ? (
+          <div className="empty-message">No projects yet. Create your first project!</div>
+        ) : (
+          <div className="projects-list">
+            {projects.map((proj) => {
+              const progress = calculateProgress(proj);
+              return (
+                <div key={proj.id} className="project-item project-link" onClick={() => setSelectedProject(proj)} role="button" tabIndex={0}>
+                  <div className="project-name">{proj.title || proj.name}</div>
+                  <div className="project-owner">Budget: KSH {(proj.budget || 0).toLocaleString()}</div>
+                  <div className="project-progress-bar">
+                    <div className="project-progress" style={{ width: `${progress}%` }} />
+                    <span className="project-percent">{progress}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       {selectedProject && (
         <ProjectDetailsModal project={selectedProject} onClose={() => setSelectedProject(null)} />

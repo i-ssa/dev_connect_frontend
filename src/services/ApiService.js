@@ -10,23 +10,9 @@ class ApiService {
       'Content-Type': 'application/json'
     };
 
-    // Try to get token from localStorage (multiple possible keys)
-    let token = localStorage.getItem('token') || 
-                localStorage.getItem('devconnect_token');
+    // Get token from localStorage - backend expects 'token' key with accessToken
+    const token = localStorage.getItem('token');
     
-    // Fallback: check if token is inside devconnect_user object
-    if (!token) {
-      try {
-        const userStr = localStorage.getItem('devconnect_user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          token = user.token || user.accessToken;
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
       console.log('✅ Authorization header added:', `Bearer ${token.substring(0, 20)}...`);
@@ -34,8 +20,7 @@ class ApiService {
       console.warn('⚠️ No token found! Authorization header NOT added.');
       console.log('Storage check:', {
         token: localStorage.getItem('token'),
-        devconnect_token: localStorage.getItem('devconnect_token'),
-        devconnect_user: localStorage.getItem('devconnect_user')
+        userId: localStorage.getItem('userId')
       });
     }
 
@@ -74,7 +59,17 @@ class ApiService {
       throw new Error(errorData.message || 'Login failed');
     }
     
-    return response.json();
+    const data = await response.json();
+    
+    // Save token and userId to localStorage (matching backend pattern)
+    if (data.accessToken) {
+      localStorage.setItem('token', data.accessToken);
+    }
+    if (data.user && data.user.userId) {
+      localStorage.setItem('userId', data.user.userId);
+    }
+    
+    return data;
   }
 
   /**
@@ -94,7 +89,9 @@ class ApiService {
    * Get all chats for a user
    */
   async getUserChats(userId) {
-    const response = await fetch(`${API_BASE_URL}/messages/chats/${userId}`);
+    const response = await fetch(`${API_BASE_URL}/messages/chats/${userId}`, {
+      headers: this.getAuthHeaders()
+    });
     
     if (!response.ok) {
       throw new Error('Failed to fetch chats');
@@ -108,7 +105,10 @@ class ApiService {
    */
   async getConversation(userId1, userId2) {
     const response = await fetch(
-      `${API_BASE_URL}/messages/conversation?userId1=${userId1}&userId2=${userId2}`
+      `${API_BASE_URL}/messages/conversation?userId1=${userId1}&userId2=${userId2}`,
+      {
+        headers: this.getAuthHeaders()
+      }
     );
     
     if (!response.ok) {
@@ -124,8 +124,8 @@ class ApiService {
   async sendMessage(senderId, receiverId, text, projectId) {
     const response = await fetch(`${API_BASE_URL}/messages/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senderId, receiverId, text, projectId })
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ senderId, receiverId, text })
     });
     
     if (!response.ok) {
@@ -136,10 +136,28 @@ class ApiService {
   }
 
   /**
+   * Update user status (for messaging)
+   */
+  async updateUserStatus(userId, status) {
+    const response = await fetch(`${API_BASE_URL}/messages/status/${userId}?status=${status}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update user status');
+    }
+    
+    return response.json();
+  }
+
+  /**
    * Get user status
    */
   async getUserStatus(userId) {
-    const response = await fetch(`${API_BASE_URL}/messages/status/${userId}`);
+    const response = await fetch(`${API_BASE_URL}/messages/status/${userId}`, {
+      headers: this.getAuthHeaders()
+    });
     
     if (!response.ok) {
       throw new Error('Failed to fetch user status');
@@ -151,15 +169,40 @@ class ApiService {
 
   /**
    * Mark messages as read
+   * @param {number} conversationId - The conversation ID
+   * @param {number} readerId - The user marking messages as read
    */
-  async markMessagesAsRead(receiverId, senderId) {
+  async markMessagesAsRead(conversationId, readerId) {
     const response = await fetch(
-      `${API_BASE_URL}/messages/read?senderId=${senderId}&receiverId=${receiverId}`,
-      { method: 'PUT' }
+      `${API_BASE_URL}/messages/read?conversationId=${conversationId}&readerId=${readerId}`,
+      { 
+        method: 'PUT',
+        headers: this.getAuthHeaders()
+      }
     );
     
     if (!response.ok) {
       throw new Error('Failed to mark messages as read');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get conversation messages by conversation ID
+   * @param {number} conversationId - The conversation ID
+   * @param {number} userId - The current user ID
+   */
+  async getConversationMessages(conversationId, userId) {
+    const response = await fetch(
+      `${API_BASE_URL}/messages/conversation/${conversationId}?userId=${userId}`,
+      {
+        headers: this.getAuthHeaders()
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch conversation messages');
     }
     
     return response.json();
@@ -180,14 +223,15 @@ class ApiService {
       throw new Error(errorData.message || 'Failed to fetch client projects');
     }
     
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : [];
   }
 
   /**
-   * Get all projects for a specific developer
+   * Get all projects for the current logged-in developer
    */
   async getProjectsByDeveloper(devId) {
-    const response = await fetch(`${API_BASE_URL}/projects/developer/${devId}`, {
+    const response = await fetch(`${API_BASE_URL}/projects/my-developer-projects`, {
       headers: this.getAuthHeaders()
     });
     
@@ -196,7 +240,8 @@ class ApiService {
       throw new Error(errorData.message || 'Failed to fetch developer projects');
     }
     
-    return response.json();
+    const text = await response.text();
+    return text ? JSON.parse(text) : [];
   }
 
   /**
@@ -267,10 +312,59 @@ class ApiService {
   }
 
   /**
+   * Get pending projects (not yet claimed)
+   */
+  async getPendingProjects() {
+    const response = await fetch(`${API_BASE_URL}/projects/pending`);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch pending projects');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Claim a project (developer claims a pending project)
+   */
+  async claimProject(projectId) {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/claim`, {
+      method: 'POST',
+      headers: this.getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to claim project');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Update project status
+   */
+  async updateProjectStatus(projectId, status) {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/status`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to update project status');
+    }
+    
+    return response.json();
+  }
+
+  /**
    * Update an existing project
    */
   async updateProject(projectId, projectData) {
-    const response = await fetch(`${API_BASE_URL}/projects/update/${projectId}`, {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(projectData)
@@ -285,24 +379,124 @@ class ApiService {
   }
 
   /**
-   * Update project status
+   * Delete a project
    */
-  async updateProjectStatus(projectId, status) {
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/status?status=${status}`, {
-      method: 'PATCH',
+  async deleteProject(projectId) {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      method: 'DELETE',
       headers: this.getAuthHeaders()
     });
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to update project status');
+      throw new Error(errorData.message || 'Failed to delete project');
+    }
+    
+    return response.ok;
+  }
+
+  // ==================== DEVELOPER METHODS ====================
+
+  /**
+   * Get all developers
+   */
+  async getAllDevelopers() {
+    const response = await fetch(`${API_BASE_URL}/developers/all`);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch developers');
     }
     
     return response.json();
   }
 
   /**
-   * Mark project as completed
+   * Get all developers with stats (completed projects and average rating)
+   * This is a more efficient endpoint than fetching developers + stats separately
+   */
+  async getAllDevelopersWithStats() {
+    const response = await fetch(`${API_BASE_URL}/developers/all-with-stats`);
+    
+    if (!response.ok) {
+      // Fallback to basic endpoint if stats endpoint doesn't exist yet
+      console.warn('Stats endpoint not available, using basic developer endpoint');
+      return this.getAllDevelopers();
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get current developer profile
+   */
+  async getCurrentDeveloperProfile() {
+    const response = await fetch(`${API_BASE_URL}/users/me/developer`, {
+      headers: this.getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch developer profile');
+    }
+    
+    return response.json();
+  }
+
+  // ==================== RATING METHODS ====================
+
+  /**
+   * Create a rating for a developer
+   */
+  async createRating(clientId, developerId, rating, comment) {
+    const response = await fetch(`${API_BASE_URL}/ratings/create`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ clientId, developerId, rating, comment })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to create rating');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get all ratings for a developer
+   */
+  async getDeveloperRatings(developerId) {
+    const response = await fetch(`${API_BASE_URL}/ratings/developer/${developerId}`, {
+      headers: this.getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch developer ratings');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get average rating for a developer
+   */
+  async getDeveloperAverageRating(developerId) {
+    const response = await fetch(`${API_BASE_URL}/ratings/developer/${developerId}/average`, {
+      headers: this.getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch average rating');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Update user (for profile updates)
    */
   async markProjectCompleted(projectId) {
     const response = await fetch(`${API_BASE_URL}/projects/${projectId}/complete`, {
@@ -355,6 +549,92 @@ class ApiService {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.message || 'Failed to claim project');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Update project status
+   * @param {number} projectId 
+   * @param {string} status - New status (e.g., 'COMPLETED', 'IN_PROGRESS')
+   */
+  async updateProjectStatus(projectId, status) {
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/status`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to update project status');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get all developers with their stats (optimized - single call)
+   * Backend should return developers with completedProjects and averageRating
+   */
+  async getAllDevelopers() {
+    const response = await fetch(`${API_BASE_URL}/developers/all-with-stats`, {
+      headers: this.getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      // Fallback to basic endpoint if stats endpoint doesn't exist
+      const basicResponse = await fetch(`${API_BASE_URL}/developers/all`, {
+        headers: this.getAuthHeaders()
+      });
+      
+      if (!basicResponse.ok) {
+        const errorData = await basicResponse.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to fetch developers');
+      }
+      
+      const developers = await basicResponse.json();
+      // Return with default stats if backend doesn't support stats endpoint yet
+      return developers.map(dev => ({
+        ...dev,
+        completedProjects: 0,
+        averageRating: 0
+      }));
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Submit a rating for a developer
+   */
+  async rateDeveloper(ratingData) {
+    const response = await fetch(`${API_BASE_URL}/ratings/create`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(ratingData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to submit rating');
+    }
+    
+    return response.json();
+  }
+
+  /**
+   * Get ratings for a developer
+   */
+  async getDeveloperRatings(developerId) {
+    const response = await fetch(`${API_BASE_URL}/ratings/developer/${developerId}`, {
+      headers: this.getAuthHeaders()
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch ratings');
     }
     
     return response.json();

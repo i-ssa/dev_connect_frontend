@@ -28,6 +28,13 @@ export default function Marketplace() {
     setIsLoading(true);
     setError(null);
     try {
+      const token = localStorage.getItem('devconnect_token');
+      if (!token) {
+        setError('Please log in to view available projects.');
+        setIsLoading(false);
+        return;
+      }
+      
       console.log('Fetching PENDING projects from backend...');
       const backendProjects = await ApiService.getProjectsByStatus('PENDING');
       console.log('Received projects:', backendProjects);
@@ -35,19 +42,23 @@ export default function Marketplace() {
       setAvailableProjects(mapped);
     } catch (err) {
       console.error('Failed to load available projects:', err);
-      setError('Failed to load available projects. Please try again.');
+      if (err.message?.includes('403') || err.message?.includes('Forbidden')) {
+        setError('Authentication required. Please log in again.');
+      } else {
+        setError('Unable to connect to server. Please try again later.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClaimProject = async (projectId) => {
-    if (!currentUser?.id && !currentUser?.userId) {
-      alert('You must be signed in as a developer to claim a project');
+    if (!currentUser?.developerId) {
+      alert('You must be signed in as a developer to claim a project. Please log out and log in again.');
       return;
     }
 
-    const devId = currentUser.id || currentUser.userId;
+    const devId = currentUser.developerId;
     setClaimingProjectId(projectId);
 
     try {
@@ -55,10 +66,10 @@ export default function Marketplace() {
       const claimedProject = await ApiService.claimProject(projectId, devId);
       console.log('Project claimed successfully:', claimedProject);
       
-      alert('✅ Project claimed successfully! Check your dashboard.');
+      alert('✅ Project claimed successfully! Redirecting to your dashboard...');
       
-      // Refresh the available projects list
-      await loadAvailableProjects();
+      // Redirect to developer dashboard to see the claimed project
+      window.location.href = '/dashboard-developer';
     } catch (err) {
       console.error('Failed to claim project:', err);
       

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import Sidebar from '../components/Sidebar'; 
+import Sidebar from '../components/Sidebar';
+import WithdrawModal from '../components/WithdrawModal';
+import TransactionDetailsModal from '../components/TransactionDetailsModal';
+import Toast from '../components/Toast';
 import '../styles/Sidebar.css';
 import '../styles/Payment.css';
 
@@ -12,6 +15,9 @@ const DeveloperPayment = () => {
   const [filterType, setFilterType] = useState('all');
   const [activityData, setActivityData] = useState([]);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [toast, setToast] = useState(null);
 
   // Placeholder data for developers (earnings focused)
   const placeholderTransactions = [
@@ -75,6 +81,20 @@ const DeveloperPayment = () => {
   const fetchPaymentData = async () => {
     const currentUserId = localStorage.getItem('userId');
     
+    // Load transactions from localStorage if available
+    const savedTransactions = JSON.parse(localStorage.getItem('developer_transactions') || '[]');
+    const savedBalance = parseFloat(localStorage.getItem('developer_balance') || '6169');
+    
+    if (savedTransactions.length > 0) {
+      setTransactions(savedTransactions);
+      setBalance(savedBalance);
+      // Calculate total earned from transactions
+      const earned = savedTransactions.reduce((sum, t) => sum + (t.amount > 0 ? t.amount : 0), 0);
+      setTotalEarned(earned);
+      setActivityData(placeholderActivity);
+      return;
+    }
+    
     if (!currentUserId) {
       // Set placeholder data when not authenticated
       setTotalEarned(8168.00);
@@ -118,6 +138,15 @@ const DeveloperPayment = () => {
   const handleManualRefresh = () => {
     fetchPaymentData();
     setLastRefresh(Date.now());
+  };
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  const handleWithdrawSuccess = (message) => {
+    showToast(message, 'success');
+    fetchPaymentData();
   };
 
   // Generate dynamic SVG path from activity data
@@ -213,6 +242,21 @@ const DeveloperPayment = () => {
             />
           </div>
           <div className="header-right-figma">
+            <button 
+              onClick={() => setShowWithdrawModal(true)}
+              className="notification-btn-figma" 
+              aria-label="Withdraw Earnings"
+              style={{ 
+                marginRight: '10px',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                padding: '8px 16px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+            >
+              💸 Withdraw
+            </button>
             <button 
               onClick={handleManualRefresh} 
               className="notification-btn-figma" 
@@ -329,7 +373,12 @@ const DeveloperPayment = () => {
           <div className="transaction-list-figma">
             {filteredTransactions.length > 0 ? (
               filteredTransactions.map(transaction => (
-                <div key={transaction.id} className="transaction-item-figma">
+                <div 
+                  key={transaction.id} 
+                  className="transaction-item-figma"
+                  onClick={() => setSelectedTransaction(transaction)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="transaction-left">
                     <div className="transaction-icon-figma developer">
                       {transaction.icon}
@@ -388,6 +437,28 @@ const DeveloperPayment = () => {
           </div>
         </div>
       </div>
+
+      {showWithdrawModal && (
+        <WithdrawModal 
+          onClose={() => setShowWithdrawModal(false)}
+          onSuccess={handleWithdrawSuccess}
+        />
+      )}
+
+      {selectedTransaction && (
+        <TransactionDetailsModal
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+        />
+      )}
+
+      {toast && (
+        <Toast 
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };

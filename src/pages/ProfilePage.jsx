@@ -9,88 +9,44 @@ const ProfilePage = ({ currentUser }) => {
 
   // Load user from localStorage or props on mount
   useEffect(() => {
-    const loadUser = () => {
-      try {
-        console.log('[ProfilePage] Loading user...', { currentUser });
+    try {
+      console.log('[ProfilePage] Starting to load user...', { currentUser });
+      
+      // Try to get user from localStorage first
+      const savedUser = localStorage.getItem('devconnect_user');
+      console.log('[ProfilePage] Saved user from localStorage:', savedUser);
+      
+      let userData = null;
+      
+      if (savedUser) {
+        userData = JSON.parse(savedUser);
+      } else if (currentUser) {
+        userData = currentUser;
+      }
+      
+      // If we have user data, ensure all fields exist
+      if (userData) {
+        if (!userData.skills) userData.skills = [];
+        if (!userData.bio) userData.bio = '';
+        if (!userData.location) userData.location = '';
+        if (!userData.website) userData.website = '';
+        if (!userData.github) userData.github = '';
+        if (!userData.linkedin) userData.linkedin = '';
+        if (!userData.experience) userData.experience = '';
+        if (!userData.hourlyRate) userData.hourlyRate = 0;
+        if (!userData.availability) userData.availability = 'Available';
+        if (!userData.joinedDate) userData.joinedDate = new Date().toISOString();
         
-        // Fallback user data
-        const defaultUser = {
-          id: 1,
-          username: 'john_doe',
-          email: 'john@example.com',
-          role: 'client',
-          firstName: 'John',
-          lastName: 'Doe',
-          avatar: null,
-          bio: 'Passionate about building innovative solutions and connecting with talented developers.',
-          location: 'San Francisco, CA',
-          website: 'https://johndoe.com',
-          github: 'johndoe',
-          linkedin: 'johndoe',
-          skills: ['JavaScript', 'React', 'Node.js', 'Python'],
-          experience: '5 years',
-          hourlyRate: 75,
-          availability: 'Available',
-          joinedDate: '2024-01-15'
-        };
-
-        let userData = currentUser;
-        
-        if (!userData) {
-          const savedUser = localStorage.getItem('devconnect_user');
-          console.log('[ProfilePage] Saved user from localStorage:', savedUser);
-          if (savedUser) {
-            userData = JSON.parse(savedUser);
-            // Ensure skills array exists
-            if (!userData.skills) userData.skills = [];
-            if (!userData.bio) userData.bio = '';
-            if (!userData.location) userData.location = '';
-            if (!userData.website) userData.website = '';
-            if (!userData.github) userData.github = '';
-            if (!userData.linkedin) userData.linkedin = '';
-            if (!userData.experience) userData.experience = '';
-            if (!userData.hourlyRate) userData.hourlyRate = 0;
-            if (!userData.availability) userData.availability = 'Available';
-            if (!userData.joinedDate) userData.joinedDate = new Date().toISOString();
-          } else {
-            userData = defaultUser;
-          }
-        }
-        
-        console.log('[ProfilePage] Final userData:', userData);
+        console.log('[ProfilePage] User data loaded:', userData);
         setUser(userData);
         setFormData(userData);
-      } catch (error) {
-        console.error('[ProfilePage] Error loading user:', error);
-        // Fallback to basic user
-        const fallback = {
-          id: 1,
-          username: 'user',
-          email: 'user@example.com',
-          role: 'client',
-          firstName: 'User',
-          lastName: 'Name',
-          avatar: null,
-          bio: '',
-          location: '',
-          website: '',
-          github: '',
-          linkedin: '',
-          skills: [],
-          experience: '',
-          hourlyRate: 0,
-          availability: 'Available',
-          joinedDate: new Date().toISOString()
-        };
-        setUser(fallback);
-        setFormData(fallback);
-      } finally {
-        console.log('[ProfilePage] Setting loading to false');
-        setLoading(false);
       }
-    };
-    
-    loadUser();
+    } catch (error) {
+      console.error('[ProfilePage] Error loading user:', error);
+    } finally {
+      console.log('[ProfilePage] Setting loading to false');
+      setLoading(false);
+    }
   }, [currentUser]);
 
   if (loading) {
@@ -107,8 +63,12 @@ const ProfilePage = ({ currentUser }) => {
     return (
       <div className="profile-page">
         <div className="profile-container">
-          <div style={{ padding: '40px', textAlign: 'center', color: 'red' }}>
-            Error loading profile. Please try refreshing the page.
+          <div style={{ padding: '40px', textAlign: 'center' }}>
+            <h2>Please log in to view your profile</h2>
+            <p>You need to be logged in to access this page.</p>
+            <button onClick={() => window.location.href = '/'} style={{ marginTop: '20px', padding: '10px 20px', cursor: 'pointer' }}>
+              Go to Home
+            </button>
           </div>
         </div>
       </div>

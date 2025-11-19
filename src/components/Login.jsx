@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/Authentication.css";
 import authIllustration from "../assets/authlogo.png";
 import { loginUser } from "../API/userAPI";
+import api from "../utils/api";
 
 export default function LoginModal({
 	isOpen,
@@ -53,7 +54,7 @@ export default function LoginModal({
 			// Store authentication data with consistent keys
 			if (result.accessToken) {
 				localStorage.setItem('devconnect_token', result.accessToken);
-				localStorage.setItem('token', result.accessToken); // Also store as 'token' for backward compatibility
+				localStorage.setItem('token', result.accessToken); // PRIMARY key for API calls
 				console.log('✅ Token stored:', result.accessToken.substring(0, 20) + '...');
 			} else {
 				console.error('❌ No accessToken in response!');
@@ -63,12 +64,38 @@ export default function LoginModal({
 			}
 			if (result.user) {
 				// Ensure user object has 'id' field for projects API
-				const userWithId = {
+				let userWithId = {
 					...result.user,
-					id: result.user.userId || result.user.id, // Ensure 'id' exists
-					userId: result.user.userId || result.user.id, // Keep userId too
-					role: result.user.userRole?.toLowerCase() || result.user.role?.toLowerCase() // Normalize role to lowercase
+					id: result.user.userId || result.user.id,
+					userId: result.user.userId || result.user.id,
+					role: result.user.userRole?.toLowerCase() || result.user.role?.toLowerCase()
 				};
+				
+				// IMPORTANT: Store userId separately for WebSocket and API calls
+				localStorage.setItem('userId', String(userWithId.userId));
+				console.log('✅ User ID stored:', userWithId.userId);
+
+				// If user is a developer, fetch developer_id
+				const userRole = (result.user?.userRole || result.user?.role || '').toUpperCase();
+				if (userRole === 'DEVELOPER') {
+					try {
+						const { getDeveloperByUserId } = await import('../API/userAPI');
+						const developer = await getDeveloperByUserId(userWithId.userId);
+						if (developer?.developerId) {
+							userWithId.developerId = developer.developerId;
+							console.log('✅ Developer ID fetched:', developer.developerId);
+						} else {
+							// Fallback: use userId as developerId if endpoint doesn't return it
+							console.warn('⚠️ No developerId in response, using userId as fallback');
+							userWithId.developerId = userWithId.userId;
+						}
+					} catch (err) {
+						console.error('Failed to fetch developer ID, using userId as fallback:', err);
+						// Fallback: use userId as developerId
+						userWithId.developerId = userWithId.userId;
+					}
+				}
+
 				localStorage.setItem('devconnect_user', JSON.stringify(userWithId));
 				console.log('✅ User stored:', userWithId);
 			}
@@ -82,14 +109,14 @@ export default function LoginModal({
 			alert(`Welcome back, ${result.user?.firstName || 'User'}!`);
 			onClose?.();
 
-			// Redirect based on user role (handle both uppercase and lowercase)
-			const userRole = result.user?.userRole?.toUpperCase() || result.user?.role?.toUpperCase();
+			// Redirect based on user role
+			const userRole = (result.user?.userRole || result.user?.role || '').toUpperCase();
 			if (userRole === 'DEVELOPER') {
-				navigate('/dashboard-developer');
+				window.location.href = '/dashboard-developer';
 			} else if (userRole === 'CLIENT') {
-				navigate('/dashboard-client');
+				window.location.href = '/dashboard-client';
 			} else {
-				navigate('/');
+				window.location.href = '/';
 			}
 		} catch (error) {
 			console.error("Login error:", error);

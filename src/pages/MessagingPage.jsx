@@ -1,59 +1,73 @@
-// Updated MessagingPage.jsx with backend integration - Preserving Sidebar
+// Updated MessagingPage.jsx with backend integration - Using new API utilities
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import ChatList from '../components/Chat/ChatList';
 import { ChatProvider } from '../context/ChatContext';
 import ChatContainer from '../components/Chat/ChatContainer';
-import ApiService from '../services/ApiService';
+import api from '../utils/api';
 import '../styles/MessagingLayout.css';
 
-const MessagingPage = ({ userRole = 'client', currentUser, onSwitchUser }) => {
+const MessagingPage = () => {
   const [selectedChat, setSelectedChat] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Fallback currentUser if not provided (for development/testing)
-  const effectiveUser = currentUser || {
-    id: 1,
-    username: 'Test User',
-    role: userRole,
-    avatar: null,
-    status: 'online'
-  };
+  // Get logged-in user from localStorage
+  useEffect(() => {
+    const userStr = localStorage.getItem('devconnect_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser({
+          id: user.id || user.userId,
+          username: user.username || user.email?.split('@')[0],
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar || null,
+          status: 'online'
+        });
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to parse user data:', error);
+        // Redirect to login if no valid user
+        navigate('/login');
+      }
+    } else {
+      // Redirect to login if not authenticated
+      navigate('/login');
+    }
+  }, [navigate]);
 
   // Auto-select chat if userId is in URL (e.g., /messages?userId=2)
   useEffect(() => {
     const userId = searchParams.get('userId');
-    if (userId) {
+    if (userId && currentUser) {
       // Load user details and auto-select
       const loadUser = async () => {
         try {
-          const user = await ApiService.getUser(parseInt(userId));
+          const user = await api.getUserById(parseInt(userId));
           setSelectedChat({
             userId: user.id,
-            userName: user.username,
+            userName: user.username || user.email?.split('@')[0],
             userAvatar: user.avatar,
             userRole: user.role,
-            userStatus: user.status,
+            userStatus: 'online',
             projectId: searchParams.get('projectId') || 1
           });
         } catch (error) {
           console.error('Failed to load user:', error);
-          // Fallback if API fails
-          setSelectedChat({
-            userId: parseInt(userId),
-            userName: 'Developer',
-            userRole: 'developer',
-            userStatus: 'online',
-            projectId: searchParams.get('projectId') || 1
-          });
         }
       };
       loadUser();
     }
-  }, [searchParams]);
+  }, [searchParams, currentUser]);
 
   const handleSelectChat = (chat) => {
+    console.log('🎯 Chat selected:', chat);
+    console.log('userId:', chat.userId, 'userName:', chat.userName);
+    console.log('Full chat object:', JSON.stringify(chat, null, 2));
     setSelectedChat(chat);
   };
 
@@ -61,35 +75,23 @@ const MessagingPage = ({ userRole = 'client', currentUser, onSwitchUser }) => {
     navigate(-1); // Go back to previous page
   };
 
+  if (loading || !currentUser) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        fontSize: '1.2rem',
+        color: '#666'
+      }}>
+        Loading messages...
+      </div>
+    );
+  }
+
   return (
     <div>
-      {/* TEMPORARY: User Switcher Button for Testing - Only on Messages Page */}
-      {currentUser && onSwitchUser && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: '10px',
-            right: '10px',
-            zIndex: 9999,
-            background: '#007bff',
-            color: 'white',
-            padding: '10px 15px',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }} 
-          onClick={onSwitchUser}
-        >
-          <span>🔄</span>
-          <span>Switch to {currentUser.role === 'client' ? 'Developer' : 'Client'}</span>
-        </div>
-      )}
-
       <div className="messaging-layout">
         {/* Back Button */}
         <button className="messaging-back-button" onClick={handleBackClick}>
@@ -107,21 +109,26 @@ const MessagingPage = ({ userRole = 'client', currentUser, onSwitchUser }) => {
 
         {/* Middle Panel - Chat List */}
         <ChatList 
-          currentUserId={effectiveUser.id}
+          currentUserId={currentUser.id}
           onSelectChat={handleSelectChat} 
           activeChat={selectedChat?.userId}
-          userRole={effectiveUser.role}
+          userRole={currentUser.role}
         />
 
         {/* Right Panel - Chat Interface */}
         <div className="chat-main-area">
-          {selectedChat ? (
+          {selectedChat && selectedChat.userId ? (
             <ChatProvider
-              currentUserId={effectiveUser.id}
+              currentUserId={currentUser.id}
               otherUserId={selectedChat.userId}
-              projectId={selectedChat.projectId}
+              projectId={selectedChat.projectId || 1}
+              otherUserName={selectedChat.userName}
             >
-              <ChatContainer />
+              <ChatContainer 
+                otherUserName={selectedChat.userName}
+                otherUserAvatar={selectedChat.userAvatar}
+                otherUserStatus={selectedChat.userStatus || 'offline'}
+              />
             </ChatProvider>
           ) : (
             <div className="no-chat-selected">
@@ -135,20 +142,16 @@ const MessagingPage = ({ userRole = 'client', currentUser, onSwitchUser }) => {
                     strokeLinejoin="round"
                   />
                 </svg>
-                <h2>
-                  {effectiveUser.role === 'client' 
-                    ? 'DevConnect Client Messaging' 
-                    : 'DevConnect Developer Messaging'}
-                </h2>
+                <h2>Welcome, {currentUser.username}!</h2>
                 <p>
-                  {effectiveUser.role === 'client'
+                  {currentUser.role === 'client'
                     ? 'Select a developer to start messaging'
                     : 'Select a client to start messaging'}
                 </p>
                 <p className="subtitle">
-                  {effectiveUser.role === 'client'
+                  {currentUser.role === 'client'
                     ? 'Chat with developers working on your projects'
-                    : 'Chat with clients whose projects you\'ve taken'}
+                    : 'Chat with clients about their projects'}
                 </p>
               </div>
             </div>

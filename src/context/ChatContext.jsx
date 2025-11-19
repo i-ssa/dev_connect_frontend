@@ -1,6 +1,6 @@
 // Updated ChatContext.jsx with proper message sending and WebSocket integration
 import { createContext, useContext, useState, useEffect } from 'react';
-import ApiService from '../services/ApiService';
+import api from '../utils/api';
 import WebSocketService from '../services/WebSocketService';
 
 const ChatContext = createContext();
@@ -13,28 +13,71 @@ export const useChat = () => {
   return context;
 };
 
-export const ChatProvider = ({ children, currentUserId, otherUserId, projectId }) => {
+export const ChatProvider = ({ children, currentUserId, otherUserId, projectId, otherUserName }) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [typing, setTyping] = useState(false);
   const [otherUserStatus, setOtherUserStatus] = useState('offline');
+  const [conversationId, setConversationId] = useState(null);
+
+  // Debug props
+  useEffect(() => {
+    console.log('🔧 ChatProvider props:', { currentUserId, otherUserId, projectId, otherUserName });
+  }, [currentUserId, otherUserId, projectId, otherUserName]);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Show desktop notification
+  const showDesktopNotification = (message, userName) => {
+    if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+      try {
+        const notification = new Notification(`New message from ${userName}`, {
+          body: message.text || 'Sent a file',
+          icon: '/logo.png',
+          badge: '/logo.png',
+          tag: `chat-${message.senderId}`,
+          requireInteraction: false
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+
+        // Auto-close after 5 seconds
+        setTimeout(() => notification.close(), 5000);
+      } catch (error) {
+        console.error('Failed to show notification:', error);
+      }
+    }
+  };
 
   // Initialize WebSocket connection when component mounts
   useEffect(() => {
     if (!currentUserId) return;
 
-    console.log(`🔌 Connecting to WebSocket for user ${currentUserId}...`);
+    console.log(`🔌 Attempting to connect to WebSocket for user ${currentUserId}...`);
     
     try {
       WebSocketService.connect(currentUserId);
       console.log('✅ WebSocket connection initiated');
     } catch (error) {
-      console.error('❌ Failed to connect to WebSocket:', error);
+      console.warn('⚠️ WebSocket connection failed - will use REST API fallback:', error.message);
+      // Continue without WebSocket - REST API will work
     }
 
     return () => {
-      console.log('🔌 Disconnecting WebSocket...');
-      WebSocketService.disconnect();
+      try {
+        console.log('🔌 Disconnecting WebSocket...');
+        WebSocketService.disconnect();
+      } catch (error) {
+        console.warn('⚠️ WebSocket disconnect error (safe to ignore):', error.message);
+      }
     };
   }, [currentUserId]);
 
@@ -81,13 +124,25 @@ export const ChatProvider = ({ children, currentUserId, otherUserId, projectId }
         setLoading(true);
         console.log(`🔄 Loading conversation between user ${currentUserId} and ${otherUserId}...`);
         
-        const conversation = await ApiService.getConversation(currentUserId, otherUserId);
-        console.log('✅ Loaded messages from backend:', conversation);
+        // Get conversation object which contains messages
+        const conversationData = await api.getConversation(currentUserId, otherUserId);
+        console.log('✅ Loaded conversation from backend:', conversationData);
         
-        setMessages(conversation);
+        // Extract messages and conversationId from conversation object
+        // Backend returns: { conversationId, messages: [...] }
+        const messages = Array.isArray(conversationData) 
+          ? conversationData  // If it's already an array of messages
+          : conversationData.messages || [];  // Otherwise extract from object
         
-        // Mark messages as read when opening conversation
-        await ApiService.markMessagesAsRead(currentUserId, otherUserId);
+        const convId = conversationData.conversationId || conversationData.id || null;
+        
+        setMessages(messages);
+        setConversationId(convId);
+        
+        // Mark messages as read if we have a conversationId
+        if (convId) {
+          await api.markMessagesAsRead(convId, currentUserId);
+        }
       } catch (error) {
         console.error('❌ Failed to load conversation from backend:', error);
         console.log('📝 Using mock message data instead');
@@ -128,10 +183,16 @@ export const ChatProvider = ({ children, currentUserId, otherUserId, projectId }
             return [...prev, message];
           });
 
+          // Show desktop notification if message is from other user
+          if (message.receiverId === currentUserId && message.senderId === otherUserId) {
+            console.log('📬 Showing desktop notification');
+            showDesktopNotification(message, otherUserName || 'User');
+          }
+
           // Mark as read if we received it
-          if (message.receiverId === currentUserId) {
+          if (message.receiverId === currentUserId && conversationId) {
             console.log('📖 Marking message as read');
-            ApiService.markMessagesAsRead(currentUserId, otherUserId).catch(err => 
+            api.markMessagesAsRead(conversationId, currentUserId).catch(err => 
               console.error('Failed to mark as read:', err)
             );
           }
@@ -194,33 +255,63 @@ export const ChatProvider = ({ children, currentUserId, otherUserId, projectId }
   }, [currentUserId, otherUserId]);
 
   // Send a message
-  const sendMessage = async (content) => {
-    if (!content.trim() || !currentUserId || !otherUserId) {
-      console.error('Cannot send message: missing content or user IDs');
+  const sendMessage = async (content, metadata = null) => {
+    console.log('🔍 sendMessage called with:', { content, metadata, currentUserId, otherUserId });
+    
+    if ((!content || !content.trim()) && !metadata) {
+      console.error('❌ Cannot send message: missing content');
+      return;
+    }
+
+    if (!currentUserId || !otherUserId) {
+      console.error('❌ Cannot send message: missing user IDs', { currentUserId, otherUserId });
       return;
     }
 
     try {
       console.log(`📤 Sending message from user ${currentUserId} to user ${otherUserId}:`, content);
       
-      // Send via API
-      const sentMessage = await ApiService.sendMessage(
-        currentUserId,
-        otherUserId,
-        content.trim(),
-        projectId || 1
-      );
+      // Create message object
+      const messageData = {
+        senderId: currentUserId,
+        receiverId: otherUserId,
+        text: content?.trim() || '',
+        content: content?.trim() || '',
+        timestamp: new Date().toISOString(),
+        status: 'SENT',
+        metadata: metadata,
+        id: Date.now() // Temporary ID until backend responds
+      };
 
-      console.log('✅ Message sent successfully via API:', sentMessage);
-
-      // Optimistically add to UI (WebSocket will also send it, but this makes UI instant)
+      console.log('✅ Adding message optimistically to UI:', messageData);
+      
+      // Optimistically add to UI for instant feedback
       setMessages(prev => {
-        const exists = prev.some(m => m.id === sentMessage.id);
-        if (exists) return prev;
-        return [...prev, sentMessage];
+        const newMessages = [...prev, messageData];
+        console.log('📝 Updated messages array:', newMessages.length, 'messages');
+        return newMessages;
       });
 
-      return sentMessage;
+      // Send via API if available
+      try {
+        const sentMessage = await api.sendMessage(
+          currentUserId,
+          otherUserId,
+          content?.trim() || ''
+        );
+        
+        console.log('✅ Message sent successfully via API:', sentMessage);
+
+        // Update with real message from backend
+        setMessages(prev => prev.map(m => 
+          m.id === messageData.id ? { ...sentMessage, metadata } : m
+        ));
+
+        return sentMessage;
+      } catch (apiError) {
+        console.error('❌ API send failed, message saved locally only:', apiError);
+        return messageData;
+      }
     } catch (error) {
       console.error('❌ Failed to send message:', error);
       throw error;

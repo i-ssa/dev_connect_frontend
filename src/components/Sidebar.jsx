@@ -81,13 +81,20 @@ export default function Sidebar({ role = "" }) {
     const toggleSidebar = () => setIsExpanded((current) => !current);
     const closeSidebar = () => setIsExpanded(false);
 
+    console.log('Sidebar - Current role:', role);
+    console.log('Sidebar - All navItems:', navItems);
+
     const visibleItems = navItems.filter(({ allowedRoles }) => {
         if (!allowedRoles || allowedRoles.length === 0) {
             return true;
         }
 
-        return allowedRoles.includes(role);
+        const isAllowed = allowedRoles.includes(role);
+        console.log('Checking item with allowedRoles:', allowedRoles, 'Current role:', role, 'Allowed:', isAllowed);
+        return isAllowed;
     });
+
+    console.log('Sidebar - Visible items:', visibleItems);
 
     const navClassName = ["sidebar-container"];
 

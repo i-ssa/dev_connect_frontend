@@ -1,11 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatBudget, formatTimeline } from '../utils/projectMapper';
+import ApiService from '../services/ApiService';
 import '../styles/ProjectDetails.css';
 
-export default function ProjectDetailsModal({ project, onClose }) {
+export default function ProjectDetailsModal({ project, onClose, onProjectUpdated }) {
   const navigate = useNavigate();
+  const [isUpdating, setIsUpdating] = useState(false);
+
   if (!project) return null;
+
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('devconnect_user') || '{}');
+    } catch {
+      return {};
+    }
+  })();
+
+  const isDeveloper = currentUser?.role === 'developer';
+  const canMarkComplete = isDeveloper && 
+    (project.status === 'in-progress' || project.status === 'active');
 
   const openChat = () => {
     // Determine the other user ID based on current user role
@@ -20,6 +35,25 @@ export default function ProjectDetailsModal({ project, onClose }) {
       } else {
         alert('No developer assigned to this project yet.');
       }
+    }
+  };
+
+  const handleMarkComplete = async () => {
+    if (!confirm('Are you sure you want to mark this project as completed?')) {
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await ApiService.updateProjectStatus(project.id, 'COMPLETED');
+      alert('✅ Project marked as completed!');
+      onClose && onClose();
+      onProjectUpdated && onProjectUpdated();
+    } catch (error) {
+      console.error('Failed to mark project as complete:', error);
+      alert('❌ Failed to update project status. Please try again.');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -68,6 +102,15 @@ export default function ProjectDetailsModal({ project, onClose }) {
           <div className="project-side-card">
             <div className="project-section">
               <button className="btn primary" onClick={openChat}>Open Chat</button>
+              {canMarkComplete && (
+                <button 
+                  className="btn success" 
+                  onClick={handleMarkComplete}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? 'Updating...' : '✓ Mark as Complete'}
+                </button>
+              )}
               <button className="btn" onClick={onClose}>Close</button>
             </div>
           </div>

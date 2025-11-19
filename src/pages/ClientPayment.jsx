@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
+import DepositModal from '../components/DepositModal';
+import TransactionDetailsModal from '../components/TransactionDetailsModal';
+import Toast from '../components/Toast';
 import '../styles/Sidebar.css';
 import '../styles/Payment.css';
 
@@ -12,6 +15,9 @@ const ClientPayment = () => {
   const [filterType, setFilterType] = useState('all');
   const [activityData, setActivityData] = useState([]);
   const [lastRefresh, setLastRefresh] = useState(Date.now());
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [toast, setToast] = useState(null);
 
   // Placeholder data with proper structure
   const placeholderTransactions = [
@@ -65,6 +71,20 @@ const ClientPayment = () => {
   const fetchPaymentData = async () => {
     const currentUserId = localStorage.getItem('userId');
     
+    // Load transactions from localStorage if available
+    const savedTransactions = JSON.parse(localStorage.getItem('client_transactions') || '[]');
+    const savedBalance = parseFloat(localStorage.getItem('client_balance') || '6169');
+    
+    if (savedTransactions.length > 0) {
+      setTransactions(savedTransactions);
+      setBalance(savedBalance);
+      // Calculate total spent from transactions
+      const spent = savedTransactions.reduce((sum, t) => sum + (t.amount < 0 ? Math.abs(t.amount) : 0), 0);
+      setTotalSpent(spent);
+      setActivityData(placeholderActivity);
+      return;
+    }
+    
     if (!currentUserId) {
       // Set placeholder data when not authenticated
       setTotalSpent(4567278);
@@ -108,6 +128,15 @@ const ClientPayment = () => {
   const handleManualRefresh = () => {
     fetchPaymentData();
     setLastRefresh(Date.now());
+  };
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  const handleDepositSuccess = (message) => {
+    showToast(message, 'success');
+    fetchPaymentData();
   };
 
   // Generate dynamic SVG path from activity data
@@ -203,6 +232,21 @@ const ClientPayment = () => {
             />
           </div>
           <div className="header-right-figma">
+            <button 
+              onClick={() => setShowDepositModal(true)}
+              className="notification-btn-figma" 
+              aria-label="Deposit Funds"
+              style={{ 
+                marginRight: '10px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                padding: '8px 16px',
+                borderRadius: '10px',
+                fontSize: '13px',
+                fontWeight: '600'
+              }}
+            >
+              💰 Deposit
+            </button>
             <button 
               onClick={handleManualRefresh} 
               className="notification-btn-figma" 
@@ -319,7 +363,12 @@ const ClientPayment = () => {
           <div className="transaction-list-figma">
             {filteredTransactions.length > 0 ? (
               filteredTransactions.map(transaction => (
-                <div key={transaction.id} className="transaction-item-figma">
+                <div 
+                  key={transaction.id} 
+                  className="transaction-item-figma"
+                  onClick={() => setSelectedTransaction(transaction)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="transaction-left">
                     <div className="transaction-icon-figma">
                       {transaction.icon}
@@ -378,6 +427,28 @@ const ClientPayment = () => {
           </div>
         </div>
       </div>
+
+      {showDepositModal && (
+        <DepositModal 
+          onClose={() => setShowDepositModal(false)}
+          onSuccess={handleDepositSuccess}
+        />
+      )}
+
+      {selectedTransaction && (
+        <TransactionDetailsModal
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+        />
+      )}
+
+      {toast && (
+        <Toast 
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 };

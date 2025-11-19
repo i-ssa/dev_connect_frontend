@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import ClientSetup from "../components/ClientSetup";
 import CreateProjectModal from "../components/CreateProjectModal";
+import ProjectDetailsModal from "../components/ProjectDetailsModal";
 import ProjectCard from "../components/ProjectCard";
 import ApiService from "../services/ApiService";
 import { mapBackendProjectToFrontend } from "../utils/projectMapper";
@@ -11,6 +12,7 @@ const MyProjects = () => {
   const location = useLocation();
   const [showSetup, setShowSetup] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
   const [activeTab, setActiveTab] = useState("all"); // all, in-progress, completed
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -180,7 +182,11 @@ const MyProjects = () => {
               ) : (
                 <div className="projects-grid">
                   {filteredProjects.map((project) => (
-                    <ProjectCard key={project.id} project={project} />
+                    <ProjectCard 
+                      key={project.id} 
+                      project={project} 
+                      onClick={() => setSelectedProject(project)}
+                    />
                   ))}
                 </div>
               )}
@@ -209,6 +215,13 @@ const MyProjects = () => {
         onClose={() => setShowCreateModal(false)}
         onCreateProject={handleCreateProject}
       />
+      {selectedProject && (
+        <ProjectDetailsModal
+          project={selectedProject}
+          onClose={() => setSelectedProject(null)}
+          onProjectUpdated={loadUserAndProjects}
+        />
+      )}
     </>
   );
 };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/Authentication.css";
 import authIllustration from "../assets/authlogo.png";
@@ -8,6 +8,7 @@ export default function SignupModal({ isOpen, onClose, onSwitchToSignin }) {
 	const navigate = useNavigate();
 	const [step, setStep] = useState("signup"); // "signup" or "role"
 	const [formData, setFormData] = useState({
+		username: "",
 		firstName: "",
 		lastName: "",
 		email: "",
@@ -19,7 +20,7 @@ export default function SignupModal({ isOpen, onClose, onSwitchToSignin }) {
 	useEffect(() => {
 		if (!isOpen) {
 			setStep("signup");
-			setFormData({ firstName: "", lastName: "", email: "", telephone: "", password: "", terms: false });
+			setFormData({ username: "", firstName: "", lastName: "", email: "", telephone: "", password: "", terms: false });
 		}
 	}, [isOpen]);
 
@@ -52,6 +53,7 @@ export default function SignupModal({ isOpen, onClose, onSwitchToSignin }) {
 	const handleRoleSelection = async (role) => {
 		try {
 			const registrationData = {
+                                username: formData.username,
 				firstName: formData.firstName,
 				lastName: formData.lastName,
 				email: formData.email,
@@ -72,28 +74,55 @@ export default function SignupModal({ isOpen, onClose, onSwitchToSignin }) {
 			if (result.refreshToken) {
 				localStorage.setItem('devconnect_refresh_token', result.refreshToken);
 			}
-			if (result.user || result.id) {
-				// Ensure user object has proper structure for projects API
-				const user = result.user || result;
-				const userWithId = {
-					...user,
-					id: user.userId || user.id,
-					userId: user.userId || user.id,
-					userRole: role
-				};
-				localStorage.setItem('devconnect_user', JSON.stringify(userWithId));
+			
+			// Always save user data - use backend response or fallback to form data
+			const user = result.user || result;
+			let userWithId = {
+				...user,
+				id: user.userId || user.id,
+				userId: user.userId || user.id,
+				username: user.username || formData.username,
+				firstName: user.firstName || formData.firstName,
+				lastName: user.lastName || formData.lastName,
+				email: user.email || formData.email,
+				telephone: user.telephone || formData.telephone,
+				userRole: role,
+				role: role.toLowerCase(),
+			};
+
+			// If user is a developer, fetch developer_id
+			if (role === 'DEVELOPER') {
+				try {
+					const { getDeveloperByUserId } = await import('../API/userAPI');
+					const developer = await getDeveloperByUserId(userWithId.userId);
+					if (developer?.developerId) {
+						userWithId.developerId = developer.developerId;
+						console.log('✅ Developer ID fetched:', developer.developerId);
+					} else {
+						// Fallback: use userId as developerId if endpoint doesn't return it
+						console.warn('⚠️ No developerId in response, using userId as fallback');
+						userWithId.developerId = userWithId.userId;
+					}
+				} catch (err) {
+					console.error('Failed to fetch developer ID, using userId as fallback:', err);
+					// Fallback: use userId as developerId
+					userWithId.developerId = userWithId.userId;
+				}
 			}
+
+			localStorage.setItem('devconnect_user', JSON.stringify(userWithId));
+			console.log('Saved user to localStorage:', userWithId);
 			
 			alert(`Welcome, ${formData.firstName}! Registration successful as ${role === 'CLIENT' ? 'Client' : 'Developer'}.`);
 			onClose?.();
 			
 			// Navigate to appropriate dashboard based on role
 			if (role === 'DEVELOPER') {
-				navigate('/dashboard-developer');
+				window.location.href = '/dashboard-developer';
 			} else if (role === 'CLIENT') {
-				navigate('/dashboard-client');
+				window.location.href = '/dashboard-client';
 			} else {
-				navigate('/');
+				window.location.href = '/';
 			}
 		} catch (error) {
 			console.error("Registration error:", error);
@@ -106,6 +135,17 @@ export default function SignupModal({ isOpen, onClose, onSwitchToSignin }) {
 		<>
 			<h2>Join &amp; Connect the Fastest Growing Online Community</h2>
 			<form className="auth-form" onSubmit={handleProceed}>
+				<div className="input-group">
+					<input
+						type="text"
+						id="username"
+						name="username"
+						placeholder="Username"
+						value={formData.username}
+						onChange={handleChange}
+						required
+					/>
+				</div>
 				<div className="input-group">
 					<input
 						type="text"

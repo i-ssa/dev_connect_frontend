@@ -1,7 +1,7 @@
 import { formatBudget, formatTimeline } from "../utils/projectMapper";
 import "../styles/ProjectCard.css";
 
-export default function ProjectCard({ project }) {
+export default function ProjectCard({ project, onClick }) {
 	const getStatusBadge = () => {
 		const statusConfig = {
 			available: { label: "Available", className: "status-available" },
@@ -35,7 +35,12 @@ export default function ProjectCard({ project }) {
 	const timeline = formatTimeline(project.timeline);
 
 	return (
-		<div className="project-card">
+		<div className="project-card" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+			{project.imageUrl && (
+				<div className="project-card-image">
+					<img src={project.imageUrl} alt={title} />
+				</div>
+			)}
 			<div className="project-card-header">
 				<h3 className="project-title">{title}</h3>
 				{getStatusBadge()}

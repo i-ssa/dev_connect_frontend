@@ -45,6 +45,7 @@ export const mapBackendProjectToFrontend = (backendProject) => {
     updatedAt: backendProject.updatedAt,
     devId: backendProject.devId,
     clientId: backendProject.clientId,
+    imageUrl: backendProject.imageUrl,
     assignedDeveloper: backendProject.devId, // Will be used for display; can fetch dev name separately
     files: [] // Files will be managed separately if backend supports file endpoints
   };
@@ -59,6 +60,7 @@ export const mapFrontendProjectToBackend = (frontendProject, clientId, devId = n
     description: frontendProject.description,
     projectBudget: parseFloat(frontendProject.budget) || 0,
     timeline: frontendProject.timeline ? new Date(frontendProject.timeline).toISOString() : null,
+    imageUrl: frontendProject.imageUrl || null,
     clientId: clientId,
     devId: devId // Can be null if developer not assigned yet
   };
