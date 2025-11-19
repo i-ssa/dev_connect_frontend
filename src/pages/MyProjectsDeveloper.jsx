@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ProjectCard from "../components/ProjectCard";
-import ApiService from "../services/ApiService";
+import { getProjectsByDeveloper } from "../api/projectAPI";
 import { mapBackendProjectToFrontend } from "../utils/projectMapper";
 import "../styles/MyProjects.css";
 
@@ -34,7 +34,7 @@ const MyProjectsDeveloper = () => {
       if (user.id || user.userId) {
         const devId = user.id || user.userId;
         console.log('📥 Fetching projects for developer ID:', devId);
-        const backendProjects = await ApiService.getProjectsByDeveloper(devId);
+        const backendProjects = await getProjectsByDeveloper(devId);
         console.log('📦 Received projects:', backendProjects);
         
         // Map backend DTOs to frontend shape

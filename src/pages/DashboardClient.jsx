@@ -1,6 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ProjectDetailsModal from '../components/ProjectDetailsModal';
+import { getProjectsByClient } from '../api/projectAPI';
+import { mapBackendProjectToFrontend } from '../utils/projectMapper';
 import '../styles/Dashboard.css';
 
 // Simple bar chart for money stats
@@ -39,37 +41,128 @@ const QuickAction = ({ label, icon }) => (
 );
 
 export default function DashboardClient() {
-  // Example stats
+  // Load current user from localStorage with state
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('devconnect_user') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState('');
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+
+  // Listen for storage changes and refresh user data
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const updatedUser = JSON.parse(localStorage.getItem('devconnect_user') || '{}');
+        setCurrentUser(updatedUser);
+        console.log('Dashboard - User data refreshed:', updatedUser);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    };
+
+    // Listen for custom storage events
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('userDataUpdated', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userDataUpdated', handleStorageChange);
+    };
+  }, []);
+
+  // Fetch authenticated client's projects
+  useEffect(() => {
+    const clientId = currentUser?.id || currentUser?.userId;
+    if (!clientId) {
+      return;
+    }
+
+    const loadProjects = async () => {
+      setProjectsLoading(true);
+      setProjectsError('');
+      setProjectsLoaded(false);
+      try {
+        const backendProjects = await getProjectsByClient(clientId);
+        const mappedProjects = (backendProjects || [])
+          .map(mapBackendProjectToFrontend)
+          .filter((project) => project && project.isClaimed);
+        setProjects(mappedProjects);
+        setProjectsLoaded(true);
+      } catch (error) {
+        console.error('Failed to load client projects:', error);
+        setProjectsError(error.message || 'Failed to load projects');
+        setProjectsLoaded(false);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+
+    loadProjects();
+  }, [currentUser?.id, currentUser?.userId]);
+
+  // Debug: Log current user data
+  console.log('Dashboard - Current User:', currentUser);
+  console.log('Dashboard - Project Count:', currentUser?.projectCount);
+  console.log('Dashboard - Completed Count:', currentUser?.completedProjectCount);
+
+  // Derive counts from loaded projects when available, otherwise fall back to user snapshot
+  const derivedTotalProjects = projects.length;
+  const derivedCompletedProjects = projects.filter((proj) => proj.status === 'completed').length;
+  const derivedActiveProjects = projects.filter((proj) => proj.status !== 'completed').length;
+
+  const totalProjects = projectsLoaded ? derivedTotalProjects : (currentUser?.projectCount || 0);
+  const completedProjects = projectsLoaded ? derivedCompletedProjects : (currentUser?.completedProjectCount || 0);
+  const activeProjects = projectsLoaded ? derivedActiveProjects : Math.max(0, totalProjects - completedProjects);
+
   const summary = [
     {
-      title: 'Agents Deployed',
-      value: 24,
-      icon: '🤖',
+      title: 'Total Projects',
+      value: totalProjects,
+      icon: '📊',
       color: '#e3f2fd',
-      note: '↑ 4 from last week',
+      note: 'All projects',
     },
     {
-      title: 'Active Workflows',
-      value: 45,
-      icon: '⚙️',
-      color: '#e8f5e9',
-      note: '↑ 12% increase',
-    },
-    {
-      title: 'Pending Alerts',
-      value: 8,
-      icon: '🔔',
+      title: 'Active Projects',
+      value: activeProjects,
+      icon: '🚀',
       color: '#fff3e0',
-      note: '↓ 3 new alerts',
+      note: 'In progress',
     },
     {
-      title: 'Completed Tasks',
-      value: 128,
+      title: 'Completed Projects',
+      value: completedProjects,
       icon: '✅',
+      color: '#e8f5e9',
+      note: 'Finished',
+    },
+    {
+      title: 'Account Status',
+      value: currentUser?.active ? 'Active' : 'Inactive',
+      icon: '👤',
       color: '#e1f5fe',
-      note: '↑ 23 today',
+      note: currentUser?.userStatus || 'Unknown',
     },
   ];
+
+  const getProjectProgressPercent = (status) => {
+    switch ((status || '').toLowerCase()) {
+      case 'completed':
+        return 100;
+      case 'in-progress':
+        return 65;
+      case 'available':
+        return 35;
+      default:
+        return 50;
+    }
+  };
 
   // Money stats for bar chart
   const clientMoney = 27879;
@@ -81,14 +174,6 @@ export default function DashboardClient() {
     { label: 'Integrations', icon: '🔗' },
     { label: 'Task Automation', icon: '⏱️' },
     { label: 'Analytics', icon: '�' },
-  ];
-
-  // Projects offered by client (include ids)
-  const projectsOffered = [
-    { id: 'p1', name: 'Restaurant Website', percent: 80, clientId: 'c100', description: 'Local restaurant site', milestones: [], status: 'In Progress' },
-    { id: 'p2', name: 'E-Commerce Platform', percent: 55, clientId: 'c100', description: 'Online store', milestones: [], status: 'In Progress' },
-    { id: 'p3', name: 'Portfolio Site', percent: 30, clientId: 'c100', description: 'Personal portfolio', milestones: [], status: 'Planning' },
-    { id: 'p4', name: 'Booking App', percent: 90, clientId: 'c100', description: 'Tour booking app', milestones: [], status: 'In Review' },
   ];
 
   const [selectedProject, setSelectedProject] = useState(null);
@@ -130,17 +215,47 @@ export default function DashboardClient() {
       </div>
 
       <div className="projects-section">
-        <div className="projects-title">Projects Offered</div>
+        <div className="projects-title">
+          Claimed Projects {projectsLoaded && <span className="projects-count">({projects.length})</span>}
+        </div>
         <div className="projects-list">
-          {projectsOffered.map((proj) => (
-            <div key={proj.id} className="project-item project-link" onClick={() => setSelectedProject(proj)} role="button" tabIndex={0}>
-              <div className="project-name">{proj.name}</div>
-              <div className="project-progress-bar">
-                <div className="project-progress" style={{ width: `${proj.percent}%` }} />
-                <span className="project-percent">{proj.percent}%</span>
-              </div>
-            </div>
-          ))}
+          {projectsLoading ? (
+            <div className="projects-empty">Loading projects...</div>
+          ) : projectsError ? (
+            <div className="projects-empty error">{projectsError}</div>
+          ) : projects.length === 0 ? (
+            <div className="projects-empty">None of your projects have been claimed yet.</div>
+          ) : (
+            projects.map((proj) => {
+              const progressPercent = getProjectProgressPercent(proj.status);
+              const statusLabel = (proj.status || 'unknown').replace('-', ' ');
+              const numericBudget = Number(proj.budget);
+              const hasBudget = Number.isFinite(numericBudget);
+              return (
+                <div
+                  key={proj.id}
+                  className="project-item project-link"
+                  onClick={() => setSelectedProject(proj)}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="project-name">{proj.title || proj.name || 'Untitled Project'}</div>
+                  <div className="project-meta">
+                    <span className={`status-chip status-${proj.status || 'unknown'}`}>
+                      {statusLabel}
+                    </span>
+                    {hasBudget && (
+                      <span className="project-budget">Budget: KSH.{numericBudget.toLocaleString()}</span>
+                    )}
+                  </div>
+                  <div className="project-progress-bar">
+                    <div className="project-progress" style={{ width: `${progressPercent}%` }} />
+                    <span className="project-percent">{progressPercent}%</span>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
       {selectedProject && (

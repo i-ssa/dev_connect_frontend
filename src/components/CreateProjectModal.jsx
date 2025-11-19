@@ -1,5 +1,6 @@
 import { useState } from "react";
-import ApiService from "../services/ApiService";
+import { createProject } from "../api/projectAPI";
+import { getUserById } from "../api/userAPI";
 import { mapFrontendProjectToBackend } from "../utils/projectMapper";
 import "../styles/CreateProjectModal.css";
 
@@ -40,6 +41,10 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 			}
 
 			const user = JSON.parse(userStr);
+			const role = (user.userRole || user.role || '').toLowerCase();
+			if (role !== 'client') {
+				throw new Error('Only clients can create projects. Please switch to a client account.');
+			}
 			const clientId = user.id || user.userId;
 
 			if (!clientId) {
@@ -54,17 +59,29 @@ export default function CreateProjectModal({ isOpen, onClose, onCreateProject })
 			console.log('Token:', localStorage.getItem('token') || localStorage.getItem('devconnect_token'));
 
 			// Create project via API
-			const createdProject = await ApiService.createProject(projectRequest);
+			const createdProject = await createProject(projectRequest);
 			console.log('Project created successfully:', createdProject);
 
-			// Upload files if present and backend supports it
+			// Refresh user data to get updated project counts
+			try {
+				const updatedUser = await getUserById(clientId);
+				const userWithId = {
+					...updatedUser,
+					id: updatedUser.userId || updatedUser.id,
+					userId: updatedUser.userId || updatedUser.id
+				};
+				localStorage.setItem('devconnect_user', JSON.stringify(userWithId));
+				console.log('User data refreshed with updated project counts:', userWithId);
+				
+				// Dispatch custom event to notify other components
+				window.dispatchEvent(new Event('userDataUpdated'));
+			} catch (refreshError) {
+				console.warn('Failed to refresh user data:', refreshError);
+			}
+
+			// Note: File upload functionality not implemented in backend yet
 			if (formData.files.length > 0) {
-				try {
-					await ApiService.uploadProjectFiles(createdProject.projectId, formData.files);
-				} catch (uploadError) {
-					console.warn('File upload failed (endpoint may not exist):', uploadError);
-					// Continue even if file upload fails
-				}
+				console.log('File upload skipped - not implemented in backend yet');
 			}
 
 			// Notify parent with the created project

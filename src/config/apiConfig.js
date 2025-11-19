@@ -1,57 +1,20 @@
-// API configuration
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081/api';
+// API configuration helpers kept for backward compatibility with legacy API modules
+import ApiService from '../services/ApiService';
+import { API_BASE_URL } from './constants';
+
+export { API_BASE_URL } from './constants';
 
 /**
  * Get authorization headers with JWT token
  * @returns {Object} Headers object with Authorization
  */
-export const getAuthHeaders = () => {
-    const token = localStorage.getItem('accessToken');
-    return {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-    };
-};
+export const getAuthHeaders = () => ApiService.getAuthHeaders();
 
 /**
  * Refresh the access token using refresh token
  * @returns {Promise<Object>} New tokens and user data
  */
-export const refreshAccessToken = async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    
-    if (!refreshToken) {
-        throw new Error('No refresh token available');
-    }
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/users/refresh`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ refreshToken })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to refresh token');
-        }
-
-        const data = await response.json();
-        
-        // Update stored tokens
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
-        return data;
-    } catch (error) {
-        // Refresh failed, clear everything and redirect to login
-        localStorage.clear();
-        window.location.href = '/';
-        throw error;
-    }
-};
+export const refreshAccessToken = async () => ApiService.refreshAccessToken();
 
 /**
  * Fetch wrapper that includes JWT token and handles token refresh
@@ -59,40 +22,7 @@ export const refreshAccessToken = async () => {
  * @param {Object} options - Fetch options
  * @returns {Promise<Response>}
  */
-export const authenticatedFetch = async (url, options = {}) => {
-    const headers = {
-        ...getAuthHeaders(),
-        ...options.headers
-    };
-
-    let response = await fetch(url, {
-        ...options,
-        headers
-    });
-
-    // Handle token expiration - try to refresh
-    if (response.status === 401) {
-        try {
-            await refreshAccessToken();
-            
-            // Retry the request with new token
-            const newHeaders = {
-                ...getAuthHeaders(),
-                ...options.headers
-            };
-            
-            response = await fetch(url, {
-                ...options,
-                headers: newHeaders
-            });
-        } catch (error) {
-            // Refresh failed, user will be redirected to login
-            throw error;
-        }
-    }
-
-    return response;
-};
+export const authenticatedFetch = async (url, options = {}) => ApiService.authorizedFetch(url, options);
 
 /**
  * Parse error response from API

@@ -10,6 +10,8 @@ export default function Marketplace() {
   const [claimingProjectId, setClaimingProjectId] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
   const [error, setError] = useState(null);
+  const [confirmProject, setConfirmProject] = useState(null);
+  const [confirmError, setConfirmError] = useState('');
 
   // Get current user from localStorage
   const currentUser = (() => {
@@ -28,10 +30,10 @@ export default function Marketplace() {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('Fetching PENDING projects from backend...');
-      const backendProjects = await ApiService.getProjectsByStatus('PENDING');
-      console.log('Received projects:', backendProjects);
-      const mapped = (backendProjects || []).map(mapBackendProjectToFrontend);
+      const backendProjects = await ApiService.getUnclaimedProjects();
+      const mapped = (backendProjects || [])
+        .map(mapBackendProjectToFrontend)
+        .filter((project) => project && !project.isClaimed);
       setAvailableProjects(mapped);
     } catch (err) {
       console.error('Failed to load available projects:', err);
@@ -41,38 +43,49 @@ export default function Marketplace() {
     }
   };
 
-  const handleClaimProject = async (projectId) => {
+  const requestClaimProject = (project) => {
+    const role = (currentUser?.userRole || currentUser?.role || '').toLowerCase();
     if (!currentUser?.id && !currentUser?.userId) {
       alert('You must be signed in as a developer to claim a project');
       return;
     }
 
+    if (role !== 'developer') {
+      alert('Only developer accounts can claim projects. Please switch accounts.');
+      return;
+    }
+
+    setConfirmProject(project);
+    setConfirmError('');
+  };
+
+  const handleConfirmClaim = async () => {
+    if (!confirmProject) {
+      return;
+    }
+
+    const projectId = confirmProject.id;
     const devId = currentUser.id || currentUser.userId;
     setClaimingProjectId(projectId);
+    setConfirmError('');
 
     try {
-      console.log(`Claiming project ${projectId} for developer ${devId}...`);
-      const claimedProject = await ApiService.claimProject(projectId, devId);
-      console.log('Project claimed successfully:', claimedProject);
-      
+      await ApiService.claimProject(projectId, devId);
       alert('✅ Project claimed successfully! Check your dashboard.');
-      
-      // Refresh the available projects list
-      await loadAvailableProjects();
+      setAvailableProjects((prev) => prev.filter((project) => project.id !== projectId));
+      setConfirmProject(null);
     } catch (err) {
       console.error('Failed to claim project:', err);
-      
-      if (err.message.includes('already claimed')) {
-        alert('❌ This project has already been claimed by another developer.');
-      } else {
-        alert(`❌ Failed to claim project: ${err.message}`);
-      }
-      
-      // Refresh list in case project was claimed by someone else
+      setConfirmError(err.message || 'Failed to claim project. Please try again.');
       await loadAvailableProjects();
     } finally {
       setClaimingProjectId(null);
     }
+  };
+
+  const handleCancelConfirm = () => {
+    setConfirmProject(null);
+    setConfirmError('');
   };
 
   if (isLoading) {
@@ -103,9 +116,9 @@ export default function Marketplace() {
   return (
     <div className="marketplace-page">
       <div className="marketplace-header">
-        <h1>Project Marketplace</h1>
+        <h1>Find Projects</h1>
         <p className="marketplace-subtitle">
-          Browse and claim available projects from clients
+          Browse and claim client projects that are still unclaimed
         </p>
         <button onClick={loadAvailableProjects} className="refresh-btn">
           🔄 Refresh
@@ -151,7 +164,7 @@ export default function Marketplace() {
                 </button>
                 <button
                   className="claim-btn"
-                  onClick={() => handleClaimProject(project.id)}
+                  onClick={() => requestClaimProject(project)}
                   disabled={claimingProjectId === project.id}
                 >
                   {claimingProjectId === project.id ? '⏳ Claiming...' : '✓ Claim Project'}
@@ -159,6 +172,32 @@ export default function Marketplace() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {confirmProject && (
+        <div className="claim-confirm-overlay" onClick={handleCancelConfirm}>
+          <div className="claim-confirm-modal" onClick={(event) => event.stopPropagation()}>
+            <h2>Claim “{confirmProject.title}”?</h2>
+            <p>
+              You are about to claim this project. Once confirmed, it will move to your dashboard and
+              disappear from the unclaimed list.
+            </p>
+            {confirmError && <p className="confirm-error">{confirmError}</p>}
+            <div className="confirm-actions">
+              <button type="button" className="cancel-btn" onClick={handleCancelConfirm} disabled={!!claimingProjectId}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="confirm-btn"
+                onClick={handleConfirmClaim}
+                disabled={!!claimingProjectId}
+              >
+                {claimingProjectId ? 'Confirming…' : 'Yes, claim project'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

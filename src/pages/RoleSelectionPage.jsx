@@ -11,8 +11,8 @@ const RoleSelectionPage = ({ onRoleSelect }) => {
   };
 
   const handleDeveloperSelection = () => {
-    // Navigate to developer dashboard with setup flag
-    navigate('/findClients', { state: { showSetup: true, role: 'developer' } });
+    // Navigate developers straight to the marketplace to find projects
+    navigate('/marketplace');
   };
 
   return (

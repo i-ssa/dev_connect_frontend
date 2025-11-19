@@ -44,14 +44,36 @@ export default function DashboardDeveloper() {
   const [myProjects, setMyProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load current user from localStorage
-  const currentUser = (() => {
+  // Load current user from localStorage with state
+  const [currentUser, setCurrentUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('devconnect_user') || '{}');
     } catch {
       return {};
     }
-  })();
+  });
+
+  // Listen for storage changes and refresh user data
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const updatedUser = JSON.parse(localStorage.getItem('devconnect_user') || '{}');
+        setCurrentUser(updatedUser);
+        console.log('Dashboard - User data refreshed:', updatedUser);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    };
+
+    // Listen for custom storage events
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('userDataUpdated', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userDataUpdated', handleStorageChange);
+    };
+  }, []);
 
   useEffect(() => {
     // Fetch developer's assigned projects from backend
@@ -77,25 +99,29 @@ export default function DashboardDeveloper() {
     loadMyProjects();
   }, [currentUser?.id, currentUser?.userId]);
 
-  // Example stats
+  // Stats from user object and loaded projects
+  const completedCount = currentUser?.completedProjectCount || myProjects.filter(p => p.status === 'completed').length;
+  const totalCount = currentUser?.projectCount || myProjects.length;
+  const activeCount = myProjects.filter(p => p.status === 'in-progress').length;
+
   const summary = [
     {
       title: 'Active Projects',
-      value: myProjects.filter(p => p.status === 'in-progress').length,
+      value: activeCount,
       icon: '🚀',
       color: '#e3f2fd',
       note: 'In Progress',
     },
     {
       title: 'Completed Projects',
-      value: myProjects.filter(p => p.status === 'completed').length,
+      value: completedCount,
       icon: '✅',
       color: '#e8f5e9',
       note: 'All Time',
     },
     {
       title: 'Total Projects',
-      value: myProjects.length,
+      value: totalCount,
       icon: '📊',
       color: '#fff3e0',
       note: 'Overall',

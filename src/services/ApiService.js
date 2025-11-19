@@ -1,44 +1,220 @@
 // API service for REST endpoints
-import { API_BASE_URL } from '../config/apiConfig';
+import { API_BASE_URL } from '../config/constants';
 
 class ApiService {
-  /**
-   * Get auth headers including token if available
-   */
-  getAuthHeaders() {
-    const headers = {
-      'Content-Type': 'application/json'
-    };
+  constructor() {
+    this.tokenExpiryBufferMs = 30 * 1000; // refresh 30s before expiry
+    this.refreshPromise = null;
+  }
 
-    // Try to get token from localStorage (multiple possible keys)
-    let token = localStorage.getItem('token') || 
-                localStorage.getItem('devconnect_token');
-    
-    // Fallback: check if token is inside devconnect_user object
-    if (!token) {
-      try {
-        const userStr = localStorage.getItem('devconnect_user');
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          token = user.token || user.accessToken;
-        }
-      } catch {
-        // Ignore parse errors
+  getStoredTokens() {
+    let storedUser = {};
+    try {
+      const userStr = localStorage.getItem('devconnect_user');
+      storedUser = userStr ? JSON.parse(userStr) : {};
+    } catch {
+      storedUser = {};
+    }
+
+    const accessToken =
+      localStorage.getItem('devconnect_token') ||
+      localStorage.getItem('token') ||
+      storedUser.accessToken ||
+      storedUser.token;
+
+    const refreshToken =
+      localStorage.getItem('devconnect_refresh_token') ||
+      localStorage.getItem('refreshToken') ||
+      storedUser.refreshToken;
+
+    const storedExpiry = Number(localStorage.getItem('devconnect_access_expires_at') || storedUser.accessExpiresAt || 0);
+    const decodedExpiry = accessToken ? this.decodeTokenExpiry(accessToken) : 0;
+
+    return {
+      accessToken,
+      refreshToken,
+      accessExpiresAt: storedExpiry || decodedExpiry || 0
+    };
+  }
+
+  decodeTokenExpiry(token) {
+    try {
+      if (!token || token.split('.').length < 2) {
+        return 0;
+      }
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload?.exp ? payload.exp * 1000 : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  persistTokens({ accessToken, refreshToken, user }) {
+    if (accessToken) {
+      localStorage.setItem('devconnect_token', accessToken);
+      localStorage.setItem('token', accessToken);
+      const expiresAt = this.decodeTokenExpiry(accessToken);
+      if (expiresAt) {
+        localStorage.setItem('devconnect_access_expires_at', String(expiresAt));
       }
     }
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-      console.log('✅ Authorization header added:', `Bearer ${token.substring(0, 20)}...`);
-    } else {
-      console.warn('⚠️ No token found! Authorization header NOT added.');
-      console.log('Storage check:', {
-        token: localStorage.getItem('token'),
-        devconnect_token: localStorage.getItem('devconnect_token'),
-        devconnect_user: localStorage.getItem('devconnect_user')
-      });
+    if (refreshToken) {
+      localStorage.setItem('devconnect_refresh_token', refreshToken);
+      localStorage.setItem('refreshToken', refreshToken);
     }
 
+    if (user) {
+      const normalizedUser = {
+        ...user,
+        id: user.userId || user.id,
+        userId: user.userId || user.id,
+        accessToken: accessToken || user.accessToken,
+        refreshToken: refreshToken || user.refreshToken,
+        accessExpiresAt: Number(localStorage.getItem('devconnect_access_expires_at')) || user.accessExpiresAt
+      };
+      localStorage.setItem('devconnect_user', JSON.stringify(normalizedUser));
+    }
+  }
+
+  clearStoredAuth() {
+    localStorage.removeItem('devconnect_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('devconnect_refresh_token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('devconnect_access_expires_at');
+    localStorage.removeItem('devconnect_user');
+  }
+
+  async ensureFreshAccessToken() {
+    const { accessToken, refreshToken, accessExpiresAt } = this.getStoredTokens();
+
+    if (!accessToken && refreshToken) {
+      await this.refreshAccessToken();
+      return;
+    }
+
+    if (!accessToken) {
+      return;
+    }
+
+    if (accessExpiresAt && Date.now() >= accessExpiresAt - this.tokenExpiryBufferMs) {
+      await this.refreshAccessToken();
+    }
+  }
+
+  async refreshAccessToken() {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    const { refreshToken } = this.getStoredTokens();
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    this.refreshPromise = (async () => {
+      const response = await fetch(`${API_BASE_URL}/users/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to refresh token');
+      }
+
+      this.persistTokens({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken || refreshToken,
+        user: data.user
+      });
+
+      return data;
+    })()
+      .catch((error) => {
+        this.handleAuthFailure(error);
+        throw error;
+      })
+      .finally(() => {
+        this.refreshPromise = null;
+      });
+
+    return this.refreshPromise;
+  }
+
+  handleAuthFailure(error) {
+    this.clearStoredAuth();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:logout'));
+      window.location.href = '/';
+    }
+    return error;
+  }
+
+  async authorizedFetch(url, options = {}) {
+    const {
+      useAuth = true,
+      setJson = true,
+      ...fetchOptions
+    } = options;
+    const isFormData = fetchOptions.body instanceof FormData;
+
+    if (useAuth) {
+      await this.ensureFreshAccessToken();
+    }
+
+    const headers = {
+      ...(fetchOptions.headers || {})
+    };
+
+    if (!isFormData && setJson) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
+
+    if (useAuth) {
+      const { accessToken } = this.getStoredTokens();
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
+    }
+
+    let response = await fetch(url, {
+      ...fetchOptions,
+      headers
+    });
+
+    if (useAuth && response.status === 401) {
+      try {
+        await this.refreshAccessToken();
+        const retryHeaders = {
+          ...headers,
+          Authorization: `Bearer ${this.getStoredTokens().accessToken}`
+        };
+
+        response = await fetch(url, {
+          ...fetchOptions,
+          headers: retryHeaders
+        });
+      } catch (error) {
+        throw this.handleAuthFailure(error);
+      }
+    }
+
+    return response;
+  }
+
+  /**
+   * Legacy helper retained for backward compatibility (synchronous callers)
+   */
+  getAuthHeaders() {
+    const { accessToken } = this.getStoredTokens();
+    const headers = { 'Content-Type': 'application/json' };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
     return headers;
   }
   /**
@@ -171,9 +347,7 @@ class ApiService {
    * Get all projects for a specific client
    */
   async getProjectsByClient(clientId) {
-    const response = await fetch(`${API_BASE_URL}/projects/client/${clientId}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/client/${clientId}`);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -187,9 +361,7 @@ class ApiService {
    * Get all projects for a specific developer
    */
   async getProjectsByDeveloper(devId) {
-    const response = await fetch(`${API_BASE_URL}/projects/developer/${devId}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/developer/${devId}`);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -203,9 +375,7 @@ class ApiService {
    * Get a single project by ID
    */
   async getProject(projectId) {
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/${projectId}`);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -219,9 +389,7 @@ class ApiService {
    * Get all projects
    */
   async getAllProjects() {
-    const response = await fetch(`${API_BASE_URL}/projects/`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/`);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -231,13 +399,22 @@ class ApiService {
     return response.json();
   }
 
+  async getUnclaimedProjects() {
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/unclaimed`);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to fetch unclaimed projects');
+    }
+
+    return response.json();
+  }
+
   /**
    * Get projects by status
    */
   async getProjectsByStatus(status) {
-    const response = await fetch(`${API_BASE_URL}/projects/status/${status}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/status/${status}`);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -252,9 +429,8 @@ class ApiService {
    * @param {Object} projectData - ProjectRequestDTO shape: { projectName, description, projectBudget, timeline, clientId, devId }
    */
   async createProject(projectData) {
-    const response = await fetch(`${API_BASE_URL}/projects/create`, {
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/create`, {
       method: 'POST',
-      headers: this.getAuthHeaders(),
       body: JSON.stringify(projectData)
     });
     
@@ -270,9 +446,8 @@ class ApiService {
    * Update an existing project
    */
   async updateProject(projectId, projectData) {
-    const response = await fetch(`${API_BASE_URL}/projects/update/${projectId}`, {
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/update/${projectId}`, {
       method: 'PUT',
-      headers: this.getAuthHeaders(),
       body: JSON.stringify(projectData)
     });
     
@@ -288,9 +463,8 @@ class ApiService {
    * Update project status
    */
   async updateProjectStatus(projectId, status) {
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/status?status=${status}`, {
-      method: 'PATCH',
-      headers: this.getAuthHeaders()
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/${projectId}/status?status=${status}`, {
+      method: 'PATCH'
     });
     
     if (!response.ok) {
@@ -305,9 +479,8 @@ class ApiService {
    * Mark project as completed
    */
   async markProjectCompleted(projectId) {
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/complete`, {
-      method: 'PATCH',
-      headers: this.getAuthHeaders()
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/${projectId}/complete`, {
+      method: 'PATCH'
     });
     
     if (!response.ok) {
@@ -322,9 +495,8 @@ class ApiService {
    * Delete a project
    */
   async deleteProject(projectId) {
-    const response = await fetch(`${API_BASE_URL}/projects/delete/${projectId}`, {
-      method: 'DELETE',
-      headers: this.getAuthHeaders()
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/delete/${projectId}`, {
+      method: 'DELETE'
     });
     
     if (!response.ok) {
@@ -341,9 +513,8 @@ class ApiService {
    * @param {number} devId 
    */
   async claimProject(projectId, devId) {
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/claim`, {
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/${projectId}/claim`, {
       method: 'POST',
-      headers: this.getAuthHeaders(),
       body: JSON.stringify({ devId })
     });
     
@@ -371,20 +542,10 @@ class ApiService {
       formData.append('files', file);
     });
 
-    const headers = {};
-    const token = localStorage.getItem('token') || 
-                  localStorage.getItem('devconnect_token') ||
-                  (JSON.parse(localStorage.getItem('devconnect_user') || '{}').token) ||
-                  (JSON.parse(localStorage.getItem('devconnect_user') || '{}').accessToken);
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/files`, {
+    const response = await this.authorizedFetch(`${API_BASE_URL}/projects/${projectId}/files`, {
       method: 'POST',
-      headers: headers,
-      body: formData
+      body: formData,
+      setJson: false
     });
     
     if (!response.ok) {

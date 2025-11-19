@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import paymentAPI from '../API/paymentAPI';
+import paymentAPI from '../api/paymentAPI';
 import '../styles/Payment.css';
 
 export default function MpesaPayment({ accountReference = 'DevConnect', transactionDesc = 'Payment' }) {

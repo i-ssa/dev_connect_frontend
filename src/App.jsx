@@ -16,7 +16,6 @@ import MyProjects from './pages/MyProjectClient';
 import MyProjectsDeveloper from './pages/MyProjectsDeveloper';
 import FindDevelopers from './pages/FindDevelopers';
 import RoleSelectionPage from './pages/RoleSelectionPage';
-import FindClients from './pages/FindClients';
 import DashboardClient from './pages/DashboardClient';
 import DashboardDeveloper from './pages/DashboardDeveloper';
 import Marketplace from './pages/Marketplace';
@@ -42,7 +41,6 @@ function Layout({ children, onSigninClick, onSignupClick, currentUser, onLogout,
     '/myProjectsDeveloper',
     '/marketplace',
     '/findDevelopers',
-    '/findClients',
     '/messages',
     '/settings',
     '/payments',
@@ -216,7 +214,6 @@ function App() {
           <Route path="/projects/:projectId" element={<ProjectDetails />} />
           <Route path="/marketplace" element={<Marketplace />} />
           <Route path="/findDevelopers" element={<FindDevelopers />} />
-          <Route path="/findClients" element={<FindClients />} />
           
           <Route 
             path="/messages" 

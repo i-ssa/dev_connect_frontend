@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import ClientSetup from "../components/ClientSetup";
 import CreateProjectModal from "../components/CreateProjectModal";
 import ProjectCard from "../components/ProjectCard";
-import ApiService from "../services/ApiService";
+import { getProjectsByClient } from "../api/projectAPI";
 import { mapBackendProjectToFrontend } from "../utils/projectMapper";
 import "../styles/MyProjects.css";
 
@@ -15,6 +15,7 @@ const MyProjects = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isClient, setIsClient] = useState(true);
 
   useEffect(() => {
     // Check if we should show the setup overlay
@@ -40,14 +41,25 @@ const MyProjects = () => {
       }
 
       const user = JSON.parse(userStr);
+      const role = (user.userRole || user.role || '').toLowerCase();
+      const userIsClient = role === 'client';
+      setIsClient(userIsClient);
+
+      if (!userIsClient) {
+        setError('Only clients can manage projects in this view.');
+        setLoading(false);
+        return;
+      }
 
       // Fetch projects from backend using clientId
       if (user.id || user.userId) {
         const clientId = user.id || user.userId;
-        const backendProjects = await ApiService.getProjectsByClient(clientId);
+        const backendProjects = await getProjectsByClient(clientId);
         
         // Map backend DTOs to frontend shape
-        const mappedProjects = backendProjects.map(mapBackendProjectToFrontend);
+        const mappedProjects = backendProjects
+          .map(mapBackendProjectToFrontend)
+          .filter((project) => project?.isClaimed);
         setProjects(mappedProjects);
       } else {
         setError('User ID not found. Cannot fetch projects.');
@@ -83,16 +95,20 @@ const MyProjects = () => {
 
   const handleCreateProject = async (newProject) => {
     try {
-      // Add to state optimistically (will be replaced by backend data on refresh)
-      const mappedProject = mapBackendProjectToFrontend(newProject);
-      setProjects(prev => [mappedProject, ...prev]);
-      
-      // Optionally reload from backend to ensure consistency
-      // await loadUserAndProjects();
-    } catch (err) {
-      console.error('Failed to add project to list:', err);
-      // Reload from backend on error
+      console.log('Project created, reloading list from backend...');
+      // Reload from backend to get the complete, up-to-date list
       await loadUserAndProjects();
+    } catch (err) {
+      console.error('Failed to reload projects after creation:', err);
+      // Try to add optimistically as fallback
+      try {
+        const mappedProject = mapBackendProjectToFrontend(newProject);
+        if (mappedProject?.isClaimed) {
+          setProjects(prev => [mappedProject, ...prev]);
+        }
+      } catch (mapErr) {
+        console.error('Failed to add project optimistically:', mapErr);
+      }
     }
   };
 
@@ -174,8 +190,8 @@ const MyProjects = () => {
               {filteredProjects.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon">📋</div>
-                  <h3>No projects yet</h3>
-                  <p>Click the + button to create your first project</p>
+                  <h3>No claimed projects yet</h3>
+                  <p>Your projects will appear here once a developer claims them.</p>
                 </div>
               ) : (
                 <div className="projects-grid">
@@ -189,13 +205,15 @@ const MyProjects = () => {
         )}
 
         {/* Floating Add Button */}
-        <button
-          className="floating-add-btn"
-          onClick={() => setShowCreateModal(true)}
-          aria-label="Create new project"
-        >
-          +
-        </button>
+        {isClient && (
+          <button
+            className="floating-add-btn"
+            onClick={() => setShowCreateModal(true)}
+            aria-label="Create new project"
+          >
+            +
+          </button>
+        )}
       </div>
 
       {/* Modals */}
@@ -204,11 +222,13 @@ const MyProjects = () => {
         onClose={handleSetupClose}
         onComplete={handleSetupComplete}
       />
-      <CreateProjectModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreateProject={handleCreateProject}
-      />
+      {isClient && (
+        <CreateProjectModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onCreateProject={handleCreateProject}
+        />
+      )}
     </>
   );
 };

@@ -34,6 +34,14 @@ export const mapFrontendStatusToBackend = (frontendStatus) => {
 export const mapBackendProjectToFrontend = (backendProject) => {
   if (!backendProject) return null;
 
+  const rawClaimState = backendProject?.isClaimed ?? backendProject?.claimed ?? backendProject?.claimStatus;
+  const normalizedClaimState = (() => {
+    if (typeof rawClaimState === 'string') {
+      return rawClaimState.toLowerCase() === 'true' || rawClaimState.toLowerCase() === 'claimed';
+    }
+    return Boolean(rawClaimState);
+  })();
+
   return {
     id: backendProject.projectId,
     title: backendProject.projectName,
@@ -46,6 +54,7 @@ export const mapBackendProjectToFrontend = (backendProject) => {
     devId: backendProject.devId,
     clientId: backendProject.clientId,
     assignedDeveloper: backendProject.devId, // Will be used for display; can fetch dev name separately
+    isClaimed: normalizedClaimState,
     files: [] // Files will be managed separately if backend supports file endpoints
   };
 };

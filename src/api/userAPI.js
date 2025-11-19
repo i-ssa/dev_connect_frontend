@@ -118,11 +118,23 @@ export const refreshToken = async (refreshToken) => {
  * @param {number} userId - User ID
  * @returns {Promise<Object>} User data (200 OK)
  */
-export const getUserById = async (userId) => {
+export const getUserById = async (userId, tokenOverride = null) => {
 	try {
-		const response = await authenticatedFetch(`${BASE_URL}/${userId}`, {
-			method: "GET",
-		});
+		let response;
+
+		if (tokenOverride) {
+			response = await fetch(`${BASE_URL}/${userId}`, {
+				method: "GET",
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${tokenOverride}`
+				}
+			});
+		} else {
+			response = await authenticatedFetch(`${BASE_URL}/${userId}`, {
+				method: "GET",
+			});
+		}
 
 		if (!response.ok) {
 			const error = await parseErrorResponse(response);

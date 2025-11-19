@@ -75,6 +75,18 @@ export default function SignupModal({ isOpen, onClose, onSwitchToSignin }) {
 			const result = await registerUser(registrationData);
 			console.log("Registration successful:", result);
 			
+			// Store user data for verification step
+			if (result.user) {
+				const user = result.user;
+				const userWithId = {
+					...user,
+					id: user.userId || user.id,
+					userId: user.userId || user.id,
+					userRole: role
+				};
+				localStorage.setItem('devconnect_user', JSON.stringify(userWithId));
+			}
+			
 			// Backend automatically sends verification email
 			// Move to verification step
 			setStep("verify");

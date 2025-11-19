@@ -1,109 +1,81 @@
 .profile-container {
   display: flex;
-  background-color: #f8f9ff;
-  min-height: 100vh;
-  font-family: "Poppins", sans-serif;
-}
+  .developer-profile-wrapper {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f8f9ff;
+    font-family: 'Poppins', sans-serif;
+  }
 
-.profile-content {
-  flex: 1;
-  padding: 40px;
-}
+  .developer-profile-main {
+    flex: 1;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
 
-.profile-content h1 {
-  font-size: 28px;
-  color: #222;
-}
+  .embedded-profile {
+    max-width: 100%;
+  }
 
-.subtitle {
-  color: #9c9c9c;
-  margin-bottom: 30px;
-}
+  .my-clients {
+    background: #fff;
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
 
-/* Edit Profile Section */
-.edit-profile {
-  background: #fff;
-  border-radius: 20px;
-  padding: 25px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  margin-bottom: 40px;
-}
+  .my-clients h2 {
+    margin-top: 0;
+    font-size: 22px;
+    color: #1f2937;
+  }
 
-.edit-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+  .client-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #efefef;
+    padding: 12px 0;
+  }
 
-.edit-header i {
-  font-size: 24px;
-  color: #6b46ff;
-}
+  .client-card:last-child {
+    border-bottom: none;
+  }
 
-.edit-fields .field {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
+  .client-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #111827;
+    font-weight: 500;
+  }
 
-.edit-fields label {
-  flex: 0.2;
-  font-weight: 500;
-  color: #333;
-}
+  .client-info i {
+    font-size: 18px;
+    color: #6b46ff;
+  }
 
-.edit-fields input {
-  flex: 0.7;
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  outline: none;
-}
+  .client-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
 
-/* Clients Section */
-.my-clients {
-  background: #fff;
-  border-radius: 20px;
-  padding: 25px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
+  .client-actions button {
+    background-color: #eef2ff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #4338ca;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
 
-.client-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #efefef;
-  padding: 12px 0;
-}
-
+  .client-actions button:hover {
+    background-color: #e0e7ff;
+  }
 .client-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.client-info i {
-  font-size: 18px;
-  color: #6b46ff;
-}
-
-.client-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.client-actions button {
-  background-color: #efefef;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.3s;
-}
-
-.client-actions button:hover {
-  background-color: #d7d5ff;
-}

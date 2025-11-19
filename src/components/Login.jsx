@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/Authentication.css";
 import authIllustration from "../assets/authlogo.png";
-import { loginUser } from "../api/userAPI";
+import { loginUser, getUserById } from "../api/userAPI";
 
 export default function LoginModal({
 	isOpen,
@@ -50,15 +50,39 @@ export default function LoginModal({
 			const result = await loginUser(credentials);
 			console.log("Login successful:", result);
 
-			// Store authentication data (matching documentation format)
+			// Store authentication data with consistent keys
 			if (result.accessToken) {
-				localStorage.setItem('accessToken', result.accessToken);
+				localStorage.setItem('devconnect_token', result.accessToken);
+				localStorage.setItem('token', result.accessToken);
 			}
 			if (result.refreshToken) {
-				localStorage.setItem('refreshToken', result.refreshToken);
+				localStorage.setItem('devconnect_refresh_token', result.refreshToken);
 			}
+			
+			// Fetch complete user profile with project counts
 			if (result.user) {
-				localStorage.setItem('user', JSON.stringify(result.user));
+				const userId = result.user.userId || result.user.id;
+				try {
+					// Get full user data including projectCount and completedProjectCount
+					const fullUserData = await getUserById(userId, result.accessToken);
+					const userWithId = {
+						...fullUserData,
+						id: fullUserData.userId || fullUserData.id,
+						userId: fullUserData.userId || fullUserData.id
+					};
+					localStorage.setItem('devconnect_user', JSON.stringify(userWithId));
+					console.log('Full user data stored:', userWithId);
+				} catch (error) {
+					console.warn('Failed to fetch full user data, using login response:', error);
+					// Fallback to user data from login response
+					const user = result.user;
+					const userWithId = {
+						...user,
+						id: user.userId || user.id,
+						userId: user.userId || user.id
+					};
+					localStorage.setItem('devconnect_user', JSON.stringify(userWithId));
+				}
 			}
 
 			// Close modal first

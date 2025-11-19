@@ -5,7 +5,6 @@ import "../styles/Sidebar.css";
 import DashboardIcon from "../assets/icons/DashboardIcon.svg";
 import ProjectsIcon from "../assets/icons/ProfileIcon.svg";
 import ProfileIcon from "../assets/icons/ProfileIcon.svg";
-import FindClientsIcon from "../assets/icons/GroupIcon.svg";
 import FindDeverlopersIcon from "../assets/icons/GroupIcon.svg";
 import MessagesIcon from "../assets/icons/MessageIcon.svg";
 import PaymentIcon from "../assets/icons/PaymentIcon.svg";
@@ -18,8 +17,7 @@ const navItems = [
     { to: "/dashboard", icon: DashboardIcon, label: "Dashboard" },
     { to: "/projects", icon: ProjectsIcon, label: "Projects", allowedRoles: ["client"] },
     { to: "/myProjectsDeveloper", icon: ProjectsIcon, label: "My Projects", allowedRoles: ["developer"] },
-    { to: "/marketplace", icon: ProjectsIcon, label: "Marketplace", allowedRoles: ["developer"] },
-    { to: "/findClients", icon: FindClientsIcon, label: "Find Clients", allowedRoles: ["developer"] },
+    { to: "/marketplace", icon: FindDeverlopersIcon, label: "Find Projects", allowedRoles: ["developer"] },
     { to: "/findDevelopers", icon: FindDeverlopersIcon, label: "Find Developers", allowedRoles: ["client"] },
     { to: "/messages", icon: MessagesIcon, label: "Messages" },
     { to: "/payment", icon: PaymentIcon, label: "Payment", allowedRoles: ["client", "developer"] },

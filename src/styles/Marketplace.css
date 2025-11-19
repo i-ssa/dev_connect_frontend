@@ -220,6 +220,88 @@
   opacity: 0.7;
 }
 
+.claim-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.claim-confirm-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.claim-confirm-modal h2 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-size: 1.5rem;
+}
+
+.claim-confirm-modal p {
+  margin: 0 0 1rem 0;
+  color: #555;
+  line-height: 1.6;
+}
+
+.confirm-error {
+  color: #c0392b;
+  background: #fdecea;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.confirm-actions .cancel-btn,
+.confirm-actions .confirm-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.confirm-actions .cancel-btn {
+  background: #ecf0f1;
+  color: #555;
+}
+
+.confirm-actions .cancel-btn:hover {
+  background: #d0d7de;
+}
+
+.confirm-actions .confirm-btn {
+  background: #27ae60;
+  color: #fff;
+}
+
+.confirm-actions .confirm-btn:hover:not(:disabled) {
+  background: #1f8f4e;
+}
+
+.confirm-actions .confirm-btn:disabled,
+.confirm-actions .cancel-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .marketplace-page {
     padding: 1rem;
